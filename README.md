@@ -69,7 +69,7 @@ Open http://localhost:5173. Environment variables and deployment: [docs/DEPLOY.m
 
 ## Team and my role
 
-Built by Team 7 at the JPMorgan Chase Code for Good hackathon, April 2026: Illia, Monika, Jack MacLeod, Chris Johnson and Yehor Mykhailov (`yehorm14`).
+Built by Team 7 at the JPMorgan Chase Code for Good hackathon, April 2026: Illia, Monika, [Jack MacLeod](https://github.com/Jack-MacLeod1), Chris Johnson and Yehor Mykhailov (`yehorm14`).
 
 I built the pandas data pipeline and risk model. It scores 746 Glasgow DataZones from five SIMD 2020 indicators, and produces dwelling-fire forecasts with a 95% range for the 23 wards from 14 years of SFRS statistics. I also wrote the dataset downloader and wired the model output into the API, including the Mock/Model toggle and model-aware explanations.
 
