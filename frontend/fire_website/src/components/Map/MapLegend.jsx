@@ -3,9 +3,9 @@ import './Map.css';
 const MapLegend = ({ hoveredRiskBand, onRiskBandHover }) => {
   return (
     <div className="map-legend" onMouseLeave={() => onRiskBandHover(null)}>
-      <h4>Risk Factor (Demand)</h4>
+      <h4>Baseline Ward Risk</h4>
       <p className="legend-subtitle">
-        Showing aggregated risk by area.
+        Colours show each ward’s baseline score.
       </p>
       
       <div

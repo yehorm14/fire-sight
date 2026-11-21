@@ -8,7 +8,8 @@ import 'leaflet/dist/leaflet.css';
 import './Map.css';
 
 const RiskMap = ({
-  timeFrame,
+  lead,
+  overlayTimeFrame,
   dataSource = 'mock',
   nightMode = false,
   showPremises = true,
@@ -38,9 +39,9 @@ const RiskMap = ({
           }
         />
 
-        <RiskLayer timeFrame={timeFrame} hoveredRiskBand={hoveredRiskBand} dataSource={dataSource} />
-        {showPremises && <PremisesLayer timeFrame={timeFrame} focus="city-centre" riskBandFilter="high" />}
-        <EventLayer timeFrame={timeFrame} />
+        <RiskLayer lead={lead} hoveredRiskBand={hoveredRiskBand} dataSource={dataSource} />
+        {showPremises && <PremisesLayer timeFrame={overlayTimeFrame} focus="city-centre" riskBandFilter="high" />}
+        <EventLayer timeFrame={overlayTimeFrame} />
       </MapContainer>
     </div>
   );

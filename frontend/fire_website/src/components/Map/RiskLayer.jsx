@@ -1,14 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GeoJSON } from 'react-leaflet';
 import { BACKEND_URL } from '../../config';
 
-
-const TIMEFRAME_ADJUSTMENTS = {
-  Current: 0,
-  'In 6 months': 4,
-  'In 1 year': 8,
-  'In 1.5 years': 12
-};
 
 const getRiskColor = (riskFactor) => {
   if (riskFactor >= 75) return '#d73027';
@@ -27,9 +20,69 @@ const safeText = (value) => {
   return String(value);
 };
 
-const RiskLayer = ({ timeFrame = 'Current', hoveredRiskBand = null, dataSource = 'mock' }) => {
+function showProjection(popup, prediction, lead) {
+  const container = popup?.getElement()?.querySelector('[data-projection]');
+  if (!container) return;
+  container.replaceChildren();
+  const result = prediction?.projections?.find((step) => step.lead === lead);
+  const isModel = prediction?.period_unit === 'financial_year';
+
+  if (lead) {
+    const row = document.createElement('p');
+    row.className = 'popup-row';
+    if (result) {
+      const period = isModel
+        ? (result.financial_year ? `FY ${result.financial_year}` : `Financial-year step ${lead}`)
+        : `Sample months ${lead - 5}–${lead}`;
+      const unit = isModel ? 'dwelling fires' : 'sample incidents';
+      const range = result.lower != null && result.upper != null
+        ? ` (residual range ${result.lower}–${result.upper})` : '';
+      row.textContent = `${period}: ${result.forecast} ${unit}${range}`;
+    } else {
+      row.textContent = 'Projection unavailable for this period.';
+    }
+    container.append(row);
+  }
+
+  const popupElement = popup.getElement();
+  const button = popupElement.querySelector('.popup-ai-button');
+  const meta = popupElement.querySelector('[data-ai-meta]');
+  const text = popupElement.querySelector('[data-ai-text]');
+  if (button && meta && text && button.dataset.lead !== String(lead)) {
+    button.dataset.lead = String(lead);
+    button.explanationRequest = null;
+    button.disabled = false;
+    button.textContent = 'AI Actionable Next Steps';
+    meta.textContent = '';
+    text.textContent = 'Click for AI-powered prevention and capacity planning recommendations.';
+  }
+
+  if (prediction?.note) {
+    const note = document.createElement('p');
+    note.className = 'popup-row';
+    const { first_financial_year: first, last_financial_year: last, years_of_data: years } = prediction;
+    note.textContent = isModel && first && last && years
+      ? `SFRS dwelling-fire data · ${years} observed years, FY ${first} to ${last}`
+      : prediction.note;
+    container.append(note);
+  }
+}
+
+const RiskLayer = ({ lead = 0, hoveredRiskBand = null, dataSource = 'mock' }) => {
   const [geoData, setGeoData] = useState(null);
   const [error, setError] = useState(null);
+
+  const geoJsonRef = useRef(null);
+  const selectedLead = useRef(lead);
+
+  useEffect(() => {
+    selectedLead.current = lead;
+    geoJsonRef.current?.eachLayer((layer) => {
+      if (layer.isPopupOpen()) {
+        showProjection(layer.getPopup(), layer.feature.properties.prediction, lead);
+      }
+    });
+  }, [lead]);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,35 +117,8 @@ const RiskLayer = ({ timeFrame = 'Current', hoveredRiskBand = null, dataSource =
     };
   }, [dataSource]);
 
-  const mapDataForTimeframe = useMemo(() => {
-    if (!geoData) return null;
-
-    const adjustment = TIMEFRAME_ADJUSTMENTS[timeFrame] ?? 0;
-
-    return {
-      ...geoData,
-      features: (geoData.features ?? []).map((feature) => {
-        const baseRisk = Number(feature.properties?.risk_score ?? 0);
-        const trendPct = Number(feature.properties?.prediction?.trend_pct ?? 0);
-        const trendAdjustment = Math.round((trendPct / 10) * (adjustment / 4));
-        const adjustedRiskFactor = Math.max(
-          0,
-          Math.min(100, baseRisk + adjustment + trendAdjustment)
-        );
-
-        return {
-          ...feature,
-          properties: {
-            ...feature.properties,
-            adjustedRiskFactor
-          }
-        };
-      })
-    };
-  }, [geoData, timeFrame]);
-
   const styleRegion = (feature) => {
-    const riskFactor = feature.properties.adjustedRiskFactor;
+    const riskFactor = feature.properties.risk_score;
     const band = getRiskBand(riskFactor);
     const isBandMatch = !hoveredRiskBand || hoveredRiskBand === band;
 
@@ -110,27 +136,13 @@ const RiskLayer = ({ timeFrame = 'Current', hoveredRiskBand = null, dataSource =
 
     const p = feature.properties;
     const wardId = safeText(p.ward_id ?? p.id ?? '');
-    const timeframeRisk = p.adjustedRiskFactor;
+    const baseRisk = p.risk_score;
     const drivers = Array.isArray(p.drivers) ? p.drivers : [];
-    const prediction = p.prediction ?? {};
-    const baseRisk = p.risk_score ?? timeframeRisk;
-    const forecast6 = prediction.forecast_6mo;
-    const trendPct = prediction.trend_pct;
     const isModel = p.data_source === 'model';
     const modelComponents = p.model_components ?? null;
 
-    const forecastLower = prediction.forecast_lower;
-    const forecastUpper = prediction.forecast_upper;
-    const ciText = forecastLower != null && forecastUpper != null
-      ? ` <span class="popup-ci">(range ${forecastLower}–${forecastUpper})</span>`
-      : '';
-    const forecastHtml = forecast6 != null
-      ? `<p class="popup-row"><b>6-month forecast:</b> ${forecast6} incidents${ciText}</p>
-         <p class="popup-row"><b>Trend:</b> ${trendPct != null ? trendPct + '%' : 'n/a'}</p>`
-      : `<p class="popup-row popup-pending">⚠ Forecast unavailable — incident data pending</p>`;
-
     const componentsBadge = isModel && modelComponents
-      ? `<span class="popup-components-badge">${modelComponents}/5 data sources</span>`
+      ? `<span class="popup-components-badge">${modelComponents}/5 indicators</span>`
       : '';
 
     const sourceBadge = `<span class="popup-source-badge popup-source-badge--${isModel ? 'model' : 'mock'}">${isModel ? 'Linear model' : 'Mock data'}</span>`;
@@ -144,15 +156,13 @@ const RiskLayer = ({ timeFrame = 'Current', hoveredRiskBand = null, dataSource =
         </div>
 
         <div class="popup-score">
-          <span class="popup-score-value" style="color: ${getRiskColor(timeframeRisk)}">
-            ${timeframeRisk}
+          <span class="popup-score-value" style="color: ${getRiskColor(baseRisk)}">
+            ${baseRisk}
           </span>
-          <span class="popup-score-label">/ 100 Risk Score</span>
+          <span class="popup-score-label">/ 100 Baseline Risk</span>
         </div>
-        <p class="popup-timeframe"><b>Time frame:</b> ${timeFrame}</p>
         <p class="popup-row"><b>Ward ID:</b> ${p.ward_id ?? 'n/a'}</p>
-        <p class="popup-row"><b>Current Score:</b> ${baseRisk}/100</p>
-        ${forecastHtml}
+        <div data-projection></div>
 
         <div class="popup-card">
           <p><b>Primary Drivers:</b><br/> ${drivers.join(', ') || 'Risk drivers unavailable.'}</p>
@@ -188,6 +198,7 @@ const RiskLayer = ({ timeFrame = 'Current', hoveredRiskBand = null, dataSource =
         const popupEl = event.popup?.getElement?.();
         if (!popupEl) return;
 
+        showProjection(event.popup, p.prediction, selectedLead.current);
         const btn = popupEl.querySelector('.popup-ai-button');
         const metaEl = popupEl.querySelector('[data-ai-meta]');
         const textEl = popupEl.querySelector('[data-ai-text]');
@@ -201,6 +212,10 @@ const RiskLayer = ({ timeFrame = 'Current', hoveredRiskBand = null, dataSource =
           const id = btn.dataset.id;
           if (!mode || !id) return;
 
+          const requestedLead = selectedLead.current;
+          const request = Symbol();
+          btn.explanationRequest = request;
+          const isCurrent = () => btn.explanationRequest === request && requestedLead === selectedLead.current;
           btn.disabled = true;
           btn.textContent = 'Generating…';
           if (metaEl) metaEl.textContent = '';
@@ -208,21 +223,25 @@ const RiskLayer = ({ timeFrame = 'Current', hoveredRiskBand = null, dataSource =
 
           try {
             const response = await fetch(
-              `${BACKEND_URL}/api/explain?mode=${encodeURIComponent(mode)}&id=${encodeURIComponent(id)}&source=${encodeURIComponent(dataSource)}`
+              `${BACKEND_URL}/api/explain?mode=${encodeURIComponent(mode)}&id=${encodeURIComponent(id)}&source=${encodeURIComponent(dataSource)}&lead=${requestedLead}`
             );
             if (!response.ok) throw new Error('Explain request failed');
             const payload = await response.json();
+            if (!isCurrent()) return;
 
             const source = safeText(payload?.source || '');
             const text = safeText(payload?.text || 'No explanation returned.');
             if (metaEl) metaEl.textContent = source ? `Source: ${source}` : '';
             textEl.textContent = text;
           } catch {
+            if (!isCurrent()) return;
             textEl.textContent =
               'Could not load the AI overview right now. Please try again.';
           } finally {
-            btn.disabled = false;
-            btn.textContent = 'AI Actionable Next Steps';
+            if (isCurrent()) {
+              btn.disabled = false;
+              btn.textContent = 'AI Actionable Next Steps';
+            }
           }
         });
       });
@@ -265,10 +284,11 @@ const RiskLayer = ({ timeFrame = 'Current', hoveredRiskBand = null, dataSource =
         </div>
       )}
 
-      {mapDataForTimeframe && (
+      {geoData && (
         <GeoJSON
-          key={`${timeFrame}-${dataSource}`}
-          data={mapDataForTimeframe}
+          key={dataSource}
+          ref={geoJsonRef}
+          data={geoData}
           style={styleRegion}
           onEachFeature={onEachFeature}
         />

@@ -4,12 +4,16 @@ import RiskMap from './components/Map/RiskMap';
 import TopRiskAreas from './components/Dashboard/TopRiskAreas';
 import { BACKEND_URL } from './config';
 
-const TIME_FRAME_OPTIONS = ['Current', 'In 6 months', 'In 1 year', 'In 1.5 years'];
+const SAMPLE_PERIODS = [
+  { lead: 6, label: 'Sample months 1–6', overlay: 'In 6 months' },
+  { lead: 12, label: 'Sample months 7–12', overlay: 'In 1 year' },
+  { lead: 18, label: 'Sample months 13–18', overlay: 'In 1.5 years' },
+];
 
 function App() {
-  const [timeFrame, setTimeFrame] = useState(TIME_FRAME_OPTIONS[0]);
+  const [lead, setLead] = useState(0);
   const [dataSource, setDataSource] = useState('mock');
-  const [modelLoaded, setModelLoaded] = useState(false);
+  const [modelStatus, setModelStatus] = useState(null);
   const [showPremises, setShowPremises] = useState(true);
   const [nightMode, setNightMode] = useState(() => {
     try {
@@ -23,9 +27,27 @@ function App() {
   useEffect(() => {
     fetch(`${BACKEND_URL}/api/status`)
       .then((r) => r.json())
-      .then((data) => setModelLoaded(data.model_loaded === true))
-      .catch(() => setModelLoaded(false));
+      .then(setModelStatus)
+      .catch(() => setModelStatus(null));
   }, []);
+
+  const modelLoaded = modelStatus?.model_loaded === true;
+  const periods = dataSource === 'model'
+    ? (modelStatus?.ward_projection_periods ?? []).map(({ lead, financial_years: years }) => ({
+        lead,
+        label: years.length === 1
+          ? `FY ${years[0]} · Year ${lead} after data`
+          : `Year ${lead} after data`,
+      }))
+    : SAMPLE_PERIODS;
+  const overlayTimeFrame = periods.find((period) => period.lead === lead)?.overlay ?? 'Current';
+
+  const selectSource = (source) => {
+    if (source !== dataSource) {
+      setLead(0);
+      setDataSource(source);
+    }
+  };
 
   return (
     <div className={`app-container${nightMode ? ' night-mode' : ''}`}>
@@ -84,13 +106,13 @@ function App() {
             <div className="data-source-buttons">
               <button
                 className={`ds-btn ${dataSource === 'mock' ? 'ds-btn--active' : ''}`}
-                onClick={() => setDataSource('mock')}
+                onClick={() => selectSource('mock')}
               >
                 Mock
               </button>
               <button
                 className={`ds-btn ${dataSource === 'model' ? 'ds-btn--active' : ''}`}
-                onClick={() => setDataSource('model')}
+                onClick={() => selectSource('model')}
                 disabled={!modelLoaded}
                 title={!modelLoaded ? 'Run the data pipeline first' : 'Switch to linear model output'}
               >
@@ -106,15 +128,16 @@ function App() {
 
       <main className="app-main">
         <div className="timeframe-control">
-          <label htmlFor="timeframe-select">Time frame</label>
+          <label htmlFor="timeframe-select">Ward projection</label>
           <select
             id="timeframe-select"
-            value={timeFrame}
-            onChange={(event) => setTimeFrame(event.target.value)}
+            value={lead}
+            onChange={(event) => setLead(Number(event.target.value))}
           >
-            {TIME_FRAME_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
+            <option value={0}>Baseline risk</option>
+            {periods.map((period) => (
+              <option key={period.lead} value={period.lead}>
+                {period.label}
               </option>
             ))}
           </select>
@@ -132,14 +155,15 @@ function App() {
         </div>
 
         <RiskMap
-          timeFrame={timeFrame}
+          lead={lead}
+          overlayTimeFrame={overlayTimeFrame}
           dataSource={dataSource}
           nightMode={nightMode}
           showPremises={showPremises}
         />
 
         <div className={`top-risk-panel${nightMode ? ' night-mode' : ''}`}>
-          <TopRiskAreas dataSource={dataSource} />
+          <TopRiskAreas key={dataSource} dataSource={dataSource} lead={lead} />
         </div>
       </main>
     </div>

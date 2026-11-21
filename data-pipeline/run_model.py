@@ -18,14 +18,13 @@ Data sources used
   raw/fire_statistics_scotland.csv — Dwelling fire counts per ward 2009-2023 (REQUIRED)
 """
 
-import ast
-import json
-import math
 import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+from ward_forecasts import load_ward_projections
 
 HERE   = Path(__file__).resolve().parent
 RAW    = HERE / "raw"
@@ -33,12 +32,6 @@ OUTPUT = HERE / "output"
 OUTPUT.mkdir(exist_ok=True)
 
 GLASGOW_CA   = "S12000049"
-# Glasgow City electoral wards: ids come from the backend ward polygons, so the
-# forecasts always cover exactly the wards the map draws. (A prefix filter on
-# "S130029" would match 95 wards, 73 of them outside Glasgow.)
-WARDS_GEOJSON = HERE.parent / "backend" / "data" / "glasgow_wards.geojson"
-with WARDS_GEOJSON.open() as _f:
-    GLASGOW_WARD_CODES = {ft["properties"]["ward_id"] for ft in json.load(_f)["features"]}
 
 # ---------------------------------------------------------------------------
 # Risk score weights — 5 real components, all from official SIMD data
@@ -183,81 +176,7 @@ print(f"  Zones with drivers: {features['drivers'].notna().sum()}/746")
 # ---------------------------------------------------------------------------
 print("\nBuilding ward-level fire forecasts ...")
 
-fire_raw = pd.read_csv(RAW / "fire_statistics_scotland.csv")
-gla_fires = fire_raw[
-    (fire_raw["FeatureCode"].isin(GLASGOW_WARD_CODES)) &
-    (fire_raw["Type of Fire"] == "Dwelling Fire") &
-    (fire_raw["Accident Status"] == "All")
-].copy()
-
-# Pivot to ward × year matrix
-pivot = (
-    gla_fires
-    .pivot_table(index="FeatureCode", columns="DateCode",
-                 values="Value", fill_value=0)
-)
-pivot = pivot.reindex(sorted(pivot.columns), axis=1)
-ward_names = gla_fires.drop_duplicates("FeatureCode").set_index("FeatureCode")["FeatureName"]
-print(f"  Glasgow wards with fire data: {len(pivot)}")
-print(f"  Years: {pivot.columns.tolist()}")
-
-
-def forecast_ward(counts, n_periods=(1, 2, 3)):
-    """Recency-weighted linear forecast with 95% CI."""
-    counts = np.asarray(counts, dtype=float)
-    n = len(counts)
-    if n < 2:
-        last = float(counts[-1]) if n else 0.0
-        return {h: {"forecast": round(last), "lower": round(last), "upper": round(last)}
-                for h in n_periods} | {"trendpct": 0.0, "data_quality": "insufficient"}
-
-    x = np.arange(n, dtype=float)
-    weights = np.exp(np.linspace(0.0, 1.0, n))
-    slope, intercept = np.polyfit(x, counts, 1, w=weights)
-
-    fitted    = slope * x + intercept
-    residuals = counts - fitted
-    res_std   = float(np.std(residuals, ddof=1)) if n > 2 else float(np.abs(residuals).mean())
-
-    results = {}
-    for h in n_periods:
-        pt = max(0.0, slope * (n - 1 + h) + intercept)
-        results[h] = {
-            "forecast": round(pt),
-            "lower":    round(max(0.0, pt - 1.96 * res_std)),
-            "upper":    round(max(0.0, pt + 1.96 * res_std)),
-        }
-
-    latest   = float(counts[-1])
-    trendpct = round((results[1]["forecast"] - latest) / latest * 100, 1) if latest else 0.0
-    return results | {"trendpct": trendpct,
-                      "slope": round(float(slope), 3),
-                      "data_quality": "sufficient" if n >= 6 else "limited"}
-
-
-ward_forecast_rows = []
-for ward_code, row in pivot.iterrows():
-    counts = row.values.astype(float)
-    r = forecast_ward(counts)
-    ward_forecast_rows.append({
-        "ward_id":        ward_code,
-        "ward_name":      ward_names.get(ward_code, ward_code),
-        "history_6mo":    counts[-6:].tolist(),   # last 3 years as 6 half-years proxy
-        "forecast_6mo":   r[1]["forecast"],
-        "forecast_lower": r[1]["lower"],
-        "forecast_upper": r[1]["upper"],
-        "forecast_12mo":  r[2]["forecast"],
-        "forecast_18mo":  r[3]["forecast"],
-        "trend_pct":      r["trendpct"],
-        "slope":          r.get("slope", 0.0),
-        "data_quality":   r["data_quality"],
-        "years_of_data":  len(counts),
-        # financial years run "2009/2010" .. "2022/2023"; report calendar span 2009-2023
-        "first_year":     int(pivot.columns[0].split("/")[0]),
-        "last_year":      int(pivot.columns[-1].split("/")[-1]),
-    })
-
-ward_forecasts_df = pd.DataFrame(ward_forecast_rows)
+ward_forecasts_df = load_ward_projections(RAW / "fire_statistics_scotland.csv")
 print(f"  Wards forecast: {len(ward_forecasts_df)}")
 print(f"  Data quality breakdown:\n{ward_forecasts_df['data_quality'].value_counts().to_string()}")
 
@@ -319,8 +238,8 @@ print("Top 10 highest-risk DataZones:")
 top10 = zones.nsmallest(10, "riskrank")[["zoneid", "zonename", "riskscore", "riskrank"]]
 print(top10.to_string(index=False))
 print()
-print("Ward forecast sample (top 5 by forecast_6mo):")
-wf_top = ward_forecasts_df.nlargest(5, "forecast_6mo")[
-    ["ward_name", "forecast_6mo", "trend_pct", "data_quality"]
+print("Ward forecast sample (top 5 by forecast_1yr):")
+wf_top = ward_forecasts_df.nlargest(5, "forecast_1yr")[
+    ["ward_name", "forecast_1yr", "trend_pct", "data_quality"]
 ]
 print(wf_top.to_string(index=False))
