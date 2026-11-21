@@ -58,15 +58,15 @@ const TopRiskAreas = ({ dataSource = 'mock', lead = 0 }) => {
   return (
     <div className="top-areas">
       <h3>Top Risk {dataSource === 'model' ? 'Zones' : 'Wards'}</h3>
-      {result.status === 'loading' && <p role="status">Loading…</p>}
+      {result.status === 'loading' && <p className="top-areas-status" role="status">Loading…</p>}
       {result.status === 'error' && (
         <>
-          <p role="alert">Could not load the risk rankings.</p>
+          <p className="top-areas-status" role="alert">Could not load the risk rankings.</p>
           <button type="button" className="top-area-ai-btn" onClick={retry}>Retry</button>
         </>
       )}
       {result.status === 'ready' && result.areas.length === 0 && (
-        <p role="status">No ranked areas available.</p>
+        <p className="top-areas-status" role="status">No ranked areas available.</p>
       )}
       {result.areas.length > 0 && (
         <ul>

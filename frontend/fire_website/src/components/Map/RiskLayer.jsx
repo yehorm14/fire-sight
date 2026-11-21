@@ -289,6 +289,7 @@ const RiskLayer = ({ lead = 0, hoveredRiskBand = null, dataSource = 'mock' }) =>
           key={dataSource}
           ref={geoJsonRef}
           data={geoData}
+          attribution={'Ward boundaries: <a href="https://www.ons.gov.uk/methodology/geography/licences">Office for National Statistics</a>. Contains OS data © Crown copyright and database right 2024.'}
           style={styleRegion}
           onEachFeature={onEachFeature}
         />

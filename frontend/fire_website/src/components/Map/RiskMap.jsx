@@ -6,6 +6,7 @@ import PremisesLayer from './PremisesLayer';
 import RiskLayer from './RiskLayer';
 import 'leaflet/dist/leaflet.css';
 import './Map.css';
+import { MAP_TILE_ATTRIBUTION, MAP_TILE_URL } from '../../config';
 
 const RiskMap = ({
   lead,
@@ -30,14 +31,9 @@ const RiskMap = ({
         className="risk-map-container"
         zoomControl={false}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url={
-            nightMode
-              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-          }
-        />
+        {MAP_TILE_URL && MAP_TILE_ATTRIBUTION && (
+          <TileLayer url={MAP_TILE_URL} attribution={MAP_TILE_ATTRIBUTION} />
+        )}
 
         <RiskLayer lead={lead} hoveredRiskBand={hoveredRiskBand} dataSource={dataSource} />
         {showPremises && <PremisesLayer timeFrame={overlayTimeFrame} focus="city-centre" riskBandFilter="high" />}

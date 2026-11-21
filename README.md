@@ -42,8 +42,7 @@ To see a projection, choose **Model**, open a ward on the map and select a finan
 
 ![Fire Sight showing Linn's 2025/2026 projection and the observed SFRS data span](docs/images/annual-ward-projection.png)
 
-The screenshot shows the ward overlay with external background tiles omitted.
-
+The default dashboard shows the ward boundaries with no external basemap.
 
 The Mock source and the premises and event overlays use illustrative sample data, not real premises or incidents. Model mode uses the pipeline output.
 
@@ -87,6 +86,7 @@ After the hackathon I did the cleanup in this copy of the repo: tests, CI, deplo
 
 - Fire statistics by type of incident: Scottish Fire and Rescue Service, via [data.gov.scot](https://data.gov.scot/dataset/fire___type_of_incident).
 - Scottish Index of Multiple Deprivation 2020 (SIMD 2020v2) and indicator data: Scottish Government.
-- Both are used under the Open Government Licence v3.0. Map tiles: OpenStreetMap contributors, CARTO.
+- Both are used under the Open Government Licence v3.0.
+- [Ward boundaries](https://www.data.gov.uk/dataset/faf874fd-aee8-4ca0-a4a9-4c8885ba3e82/wards-may-2024-boundaries-uk-bgc): Office for National Statistics. Contains OS data © Crown copyright and database right 2024.
 
 The code ("Code") in this repository was created solely by the student teams during a coding competition hosted by JPMorgan Chase Bank, N.A. ("JPMC"). JPMC did not create or contribute to the development of the Code. This Code is provided AS IS and JPMC makes no warranty of any kind, express or implied, as to the Code, including but not limited to, merchantability, satisfactory quality, non-infringement, title or fitness for a particular purpose or use.
