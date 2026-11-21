@@ -4,66 +4,49 @@ import './TopRiskAreas.css';
 import { BACKEND_URL } from '../../config';
 
 
-const TopRiskAreas = ({ dataSource = 'mock' }) => {
-  const [areas, setAreas]         = useState([]);
-  const [aiById, setAiById]       = useState({});
-  const [loadingById, setLoadingById] = useState({});
+const TopRiskAreas = ({ dataSource = 'mock', lead = 0 }) => {
+  const [result, setResult] = useState({ status: 'loading', areas: [] });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    setAreas([]);
-    setAiById({});
+    const controller = new AbortController();
     const fetchAreas = async () => {
       try {
-        if (dataSource === 'model') {
-          const res  = await fetch(`${BACKEND_URL}/api/zones/top?n=5`);
-          const data = await res.json();
-          setAreas(data.map((z) => ({
-            id:       z.zoneid,
-            mode:     'zone',
-            name:     z.zonename || z.zoneid,
-            risk:     z.riskscore ?? 0,
-            drivers:  Array.isArray(z.drivers) ? z.drivers : [],
-            forecast: z.forecast6mo != null ? Math.round(z.forecast6mo) : null,
-            trend:    z.trendpct   != null ? z.trendpct              : null,
-          })));
-        } else {
-          const res  = await fetch(`${BACKEND_URL}/api/strategic/wards`);
-          const data = await res.json();
-          setAreas(
-            data
+        const path = dataSource === 'model' ? '/api/zones/top?n=5' : '/api/strategic/wards';
+        const response = await fetch(`${BACKEND_URL}${path}`, { signal: controller.signal });
+        if (!response.ok) throw new Error('Risk rankings request failed');
+        const data = await response.json();
+        const areas = dataSource === 'model'
+          ? data.map((zone) => ({
+              id: zone.zoneid,
+              mode: 'zone',
+              name: zone.zonename || zone.zoneid,
+              risk: zone.riskscore ?? 0,
+              drivers: Array.isArray(zone.drivers) ? zone.drivers : [],
+            }))
+          : data
               .sort((a, b) => (b.risk_score ?? 0) - (a.risk_score ?? 0))
               .slice(0, 5)
-              .map((w) => ({
-                id:       w.ward_id,
-                mode:     'ward',
-                name:     w.ward_name,
-                risk:     w.risk_score,
-                drivers:  Array.isArray(w.drivers) ? w.drivers : [],
-                forecast: w.prediction?.forecast_6mo ?? null,
-                trend:    w.prediction?.trend_pct    ?? null,
-              }))
-          );
-        }
+              .map((ward) => ({
+                id: ward.ward_id,
+                mode: 'ward',
+                name: ward.ward_name,
+                risk: ward.risk_score,
+                drivers: Array.isArray(ward.drivers) ? ward.drivers : [],
+                projections: ward.prediction?.projections,
+              }));
+        if (!controller.signal.aborted) setResult({ status: 'ready', areas });
       } catch {
-        setAreas([]);
+        if (!controller.signal.aborted) setResult({ status: 'error', areas: [] });
       }
     };
     fetchAreas();
-  }, [dataSource]);
+    return () => controller.abort();
+  }, [dataSource, attempt]);
 
-  const fetchAI = async (id, mode) => {
-    setLoadingById((p) => ({ ...p, [id]: true }));
-    try {
-      const res  = await fetch(
-        `${BACKEND_URL}/api/explain?mode=${mode}&id=${encodeURIComponent(id)}&source=${dataSource}`
-      );
-      const data = await res.json();
-      setAiById((p) => ({ ...p, [id]: data.text || 'No recommendation returned.' }));
-    } catch {
-      setAiById((p) => ({ ...p, [id]: 'Could not load recommendations right now.' }));
-    } finally {
-      setLoadingById((p) => ({ ...p, [id]: false }));
-    }
+  const retry = () => {
+    setResult({ status: 'loading', areas: [] });
+    setAttempt((value) => value + 1);
   };
 
   const riskColor = (score) => {
@@ -75,11 +58,19 @@ const TopRiskAreas = ({ dataSource = 'mock' }) => {
   return (
     <div className="top-areas">
       <h3>Top Risk {dataSource === 'model' ? 'Zones' : 'Wards'}</h3>
-      {areas.length === 0 ? (
-        <p className="top-areas-loading">Loading…</p>
-      ) : (
+      {result.status === 'loading' && <p className="top-areas-status" role="status">Loading…</p>}
+      {result.status === 'error' && (
+        <>
+          <p className="top-areas-status" role="alert">Could not load the risk rankings.</p>
+          <button type="button" className="top-area-ai-btn" onClick={retry}>Retry</button>
+        </>
+      )}
+      {result.status === 'ready' && result.areas.length === 0 && (
+        <p className="top-areas-status" role="status">No ranked areas available.</p>
+      )}
+      {result.areas.length > 0 && (
         <ul>
-          {areas.map((a) => (
+          {result.areas.map((a) => (
             <li key={a.id} className="top-area-item">
               <div className="top-area-header">
                 <span className="top-area-name">{a.name}</span>
@@ -92,28 +83,7 @@ const TopRiskAreas = ({ dataSource = 'mock' }) => {
                 <p className="top-area-drivers">{a.drivers.slice(0, 2).join(' · ')}</p>
               )}
 
-              {a.forecast != null && (
-                <p className="top-area-forecast">
-                  6-month forecast: <strong>{a.forecast}</strong> incidents
-                  {a.trend != null && (
-                    <span className={`top-area-trend ${a.trend > 0 ? 'up' : a.trend < 0 ? 'down' : ''}`}>
-                      {' '}({a.trend > 0 ? '+' : ''}{a.trend}%)
-                    </span>
-                  )}
-                </p>
-              )}
-
-              <button
-                className="top-area-ai-btn"
-                onClick={() => fetchAI(a.id, a.mode)}
-                disabled={!!loadingById[a.id]}
-              >
-                {loadingById[a.id] ? 'Generating…' : 'AI Next Steps'}
-              </button>
-
-              {aiById[a.id] && (
-                <div className="top-area-ai-text">{aiById[a.id]}</div>
-              )}
+              <AreaDetails key={lead} area={a} dataSource={dataSource} lead={lead} />
             </li>
           ))}
         </ul>
@@ -121,5 +91,40 @@ const TopRiskAreas = ({ dataSource = 'mock' }) => {
     </div>
   );
 };
+
+function AreaDetails({ area, dataSource, lead }) {
+  const [explanation, setExplanation] = useState('');
+  const [loading, setLoading] = useState(false);
+  const projection = area.projections?.find((step) => step.lead === lead);
+
+  const fetchExplanation = async () => {
+    setLoading(true);
+    try {
+      const query = new URLSearchParams({ mode: area.mode, id: area.id, source: dataSource, lead });
+      const response = await fetch(`${BACKEND_URL}/api/explain?${query}`);
+      if (!response.ok) throw new Error('Explanation request failed');
+      const data = await response.json();
+      setExplanation(data.text || 'No recommendation returned.');
+    } catch {
+      setExplanation('Could not load recommendations right now.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {projection && (
+        <p className="top-area-forecast">
+          Sample months {lead - 5}–{lead}: <strong>{projection.forecast}</strong> incidents
+        </p>
+      )}
+      <button type="button" className="top-area-ai-btn" onClick={fetchExplanation} disabled={loading}>
+        {loading ? 'Generating…' : 'AI Next Steps'}
+      </button>
+      {explanation && <div className="top-area-ai-text">{explanation}</div>}
+    </>
+  );
+}
 
 export default TopRiskAreas;

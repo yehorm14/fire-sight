@@ -8,7 +8,7 @@ Fetches the raw inputs that run_model.py needs into data-pipeline/raw/
 
 Files written:
     raw/simd2020_indicators.xlsx      SIMD 2020v2 indicator data (Scottish Government)
-    raw/fire_statistics_scotland.csv  Fires by type of incident, per ward (statistics.gov.scot)
+    raw/fire_statistics_scotland.csv  Fires by type of incident, per ward (data.gov.scot)
 
 Manual step: raw/simd2020.csv (SIMD 2020v2 ranks and deciles per data zone).
 See the message printed at the end.
@@ -36,8 +36,8 @@ SIMD_INDICATORS_URL = (
     "govscot%3Adocument/SIMD%2B2020v2%2B-%2Bindicators.xlsx"
 )
 FIRE_STATS_URL = (
-    "https://statistics.gov.scot/downloads/cube-table"
-    "?uri=http%3A%2F%2Fstatistics.gov.scot%2Fdata%2Ffire---type-of-incident"
+    "https://data.gov.scot/dataset/fire___type_of_incident/resource/"
+    "f6b74111-b687-45dc-885d-66857bef37ba/download?format=csv"
 )
 DATAZONE_BOUNDARIES_URL = "https://maps.gov.scot/ATOM/shapefiles/SG_DataZoneBdry_2011.zip"
 SIMD_PAGE = "https://www.gov.scot/collections/scottish-index-of-multiple-deprivation-2020/"

@@ -1,11 +1,14 @@
 import './Map.css';
+import { MAP_TILE_ATTRIBUTION, MAP_TILE_URL } from '../../config';
 
 const MapLegend = ({ hoveredRiskBand, onRiskBandHover }) => {
   return (
     <div className="map-legend" onMouseLeave={() => onRiskBandHover(null)}>
-      <h4>Risk Factor (Demand)</h4>
+      <h4>Baseline Ward Risk</h4>
       <p className="legend-subtitle">
-        Showing aggregated risk by area.
+        {MAP_TILE_URL && MAP_TILE_ATTRIBUTION
+          ? 'Colours show each ward’s baseline score.'
+          : 'Ward boundaries shown without a street basemap.'}
       </p>
       
       <div

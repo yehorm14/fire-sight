@@ -45,8 +45,10 @@ def test_model_source_has_forecast_for_every_ward(client):
     data = client.get("/api/strategic/wards.geojson", params={"source": "model"}).json()
     for feature in data["features"]:
         prediction = feature["properties"]["prediction"]
-        assert prediction["forecast_6mo"] is not None, feature["properties"]["ward_name"]
-        assert prediction["forecast_lower"] <= prediction["forecast_6mo"] <= prediction["forecast_upper"]
+        assert prediction["period_unit"] == "financial_year"
+        assert [step["lead"] for step in prediction["projections"]] == [1, 2, 3]
+        for step in prediction["projections"]:
+            assert step["lower"] <= step["forecast"] <= step["upper"]
 
 
 def test_single_ward_and_404(client):
@@ -136,3 +138,51 @@ def test_cors_warning_when_unset_in_production(monkeypatch, caplog):
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example")
     assert main.resolve_cors_origins() == ["https://app.example"]
     assert "CORS_ORIGINS is not set" not in caplog.text
+
+
+def test_model_projection_dates_and_legacy_client_aliases(client):
+    status = client.get("/api/status").json()
+    assert status["ward_projection_periods"] == [
+        {"lead": 1, "financial_years": ["2023/2024"]},
+        {"lead": 2, "financial_years": ["2024/2025"]},
+        {"lead": 3, "financial_years": ["2025/2026"]},
+    ]
+    ward = client.get("/api/strategic/wards/S13002967", params={"source": "model"}).json()
+    prediction = ward["properties"]["prediction"]
+    assert prediction["source"] == "model"
+    assert prediction["last_financial_year"] == "2022/2023"
+    assert prediction["first_financial_year"] == "2009/2010"
+    assert [(r["financial_year"], r["forecast"]) for r in prediction["projections"]] == [
+        ("2023/2024", 30), ("2024/2025", 29), ("2025/2026", 28),
+    ]
+    assert [prediction[key] for key in ("forecast_6mo", "forecast_12mo", "forecast_18mo")] == [30, 29, 28]
+    explain = client.get("/api/explain", params={
+        "mode": "ward", "id": "S13002967", "source": "model", "lead": 3,
+    }).json()["text"]
+    assert "28 dwelling fires projected for FY 2025/2026" in explain
+
+
+def test_legacy_ward_csv_has_only_the_saved_range(client, monkeypatch, tmp_path):
+    import main
+
+    old_csv = tmp_path / "legacy.csv"
+    old_csv.write_text(
+        "ward_id,first_year,last_year,years_of_data,forecast_6mo,forecast_12mo,forecast_18mo,"
+        "forecast_lower,forecast_upper\n"
+        "S13002967,2009,2023,14,30,29,28,11,49\n"
+    )
+    monkeypatch.setattr(main, "WARD_FORECASTS_CSV", old_csv)
+    monkeypatch.setattr(main, "ward_forecasts", main.load_ward_forecasts())
+    ward = client.get("/api/strategic/wards/S13002967", params={"source": "model"}).json()
+    first, second, third = ward["properties"]["prediction"]["projections"]
+    assert first == {"lead": 1, "financial_year": "2023/2024", "forecast": 30, "lower": 11, "upper": 49}
+    assert second["financial_year"] == "2024/2025" and second["lower"] is None
+    assert third["financial_year"] == "2025/2026" and third["upper"] is None
+
+
+def test_mock_forecast_periods_are_sample_months(client):
+    mock = client.get("/api/strategic/wards").json()[0]["prediction"]
+    assert mock["source"] == "mock"
+    assert mock["period_unit"] == "month"
+    assert [step["lead"] for step in mock["projections"]] == [6, 12, 18]
+    assert all("financial_year" not in step for step in mock["projections"])

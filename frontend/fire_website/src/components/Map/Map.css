@@ -713,3 +713,11 @@
     max-width: calc(100vw - 32px);
   }
 }
+
+.risk-map-container.leaflet-container {
+  background: #e4e9e9;
+}
+
+.night-mode .risk-map-container.leaflet-container {
+  background: #202a37;
+}

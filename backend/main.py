@@ -159,33 +159,16 @@ def risk_band(score):
 
 def forecast_incidents(counts):
     """Linear trend forecast ported from the data-pipeline notebook."""
-    if not counts:
-        return {
-            "forecast_6mo": 0,
-            "forecast_12mo": 0,
-            "forecast_18mo": 0,
-            "forecast_lower": 0,
-            "forecast_upper": 0,
-            "trend_pct": 0.0,
-        }
-
-    if len(counts) == 1:
-        only_value = int(counts[0])
-        return {
-            "forecast_6mo": only_value,
-            "forecast_12mo": only_value,
-            "forecast_18mo": only_value,
-            "forecast_lower": only_value,
-            "forecast_upper": only_value,
-            "trend_pct": 0.0,
-        }
-
+    counts = counts or [0]
     n = len(counts)
     x_values = list(range(n))
     x_mean = sum(x_values) / n
     y_mean = sum(counts) / n
-    denominator = sum((x - x_mean) ** 2 for x in x_values)
-    slope = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, counts)) / denominator
+    slope = (
+        sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, counts))
+        / sum((x - x_mean) ** 2 for x in x_values)
+        if n > 1 else 0
+    )
     intercept = y_mean - slope * x_mean
 
     fitted = [slope * x + intercept for x in x_values]
@@ -204,20 +187,28 @@ def forecast_incidents(counts):
             "upper": round(max(0.0, point + 1.96 * residual_std)),
         }
 
-    six_month = forecast(1)
+    projections = [
+        {"lead": step * 6, **forecast(step)}
+        for step in (1, 2, 3)
+    ]
+    six_month, twelve_month, eighteen_month = projections
     latest = counts[-1]
     trend_pct = round((six_month["forecast"] - latest) / latest * 100, 1) if latest else 0.0
 
     return {
         "model": "linear_trend_forecast",
+        "source": "mock",
+        "period_unit": "month",
+        "range_method": "residual_spread",
+        "projections": projections,
         "history_6mo": counts,
         "forecast_6mo": six_month["forecast"],
-        "forecast_12mo": forecast(2)["forecast"],
-        "forecast_18mo": forecast(3)["forecast"],
+        "forecast_12mo": twelve_month["forecast"],
+        "forecast_18mo": eighteen_month["forecast"],
         "forecast_lower": six_month["lower"],
         "forecast_upper": six_month["upper"],
         "trend_pct": trend_pct,
-        "note": "Uses prototype six-month incident history until real SFRS incident data is available.",
+        "note": "Illustrative projections from six-month sample counts.",
     }
 
 
@@ -241,21 +232,73 @@ def ward_summary(feature):
     }
 
 
-def forecast_basis(wf: Dict[str, Any]) -> Dict[str, Any]:
-    """Length and span of the SFRS history behind a ward forecast, read from the data."""
-    years = wf.get("years_of_data")
-    first, last = wf.get("first_year"), wf.get("last_year")
-    span = f" ({int(first)}–{int(last)})" if first is not None and last is not None else ""
+def annual_ward_prediction(row):
+    """Read either regenerated annual columns or the original mislabeled annual CSV."""
+    first, last, years = (row.get(key) for key in ("first_year", "last_year", "years_of_data"))
+    first_period = row.get("first_financial_year") or (f"{first}/{first + 1}" if first is not None else None)
+    last_period = row.get("last_financial_year") or (f"{last - 1}/{last}" if last is not None else None)
+    legacy_keys = ("forecast_6mo", "forecast_12mo", "forecast_18mo")
+    projections = []
+    for lead, legacy_key in enumerate(legacy_keys, start=1):
+        value = row.get(f"forecast_{lead}yr", row.get(legacy_key))
+        if value is None:
+            continue
+        start = last + lead - 1 if last is not None else None
+        projections.append({
+            "lead": lead,
+            "financial_year": row.get(f"financial_year_{lead}yr") or (
+                f"{start}/{start + 1}" if start is not None else None
+            ),
+            "forecast": value,
+            "lower": row.get(f"forecast_lower_{lead}yr", row.get("forecast_lower") if lead == 1 else None),
+            "upper": row.get(f"forecast_upper_{lead}yr", row.get("forecast_upper") if lead == 1 else None),
+        })
+
+    span = f" ({first}–{last})" if first is not None and last is not None else ""
+    note = (
+        f"Based on {years} years of SFRS dwelling fire data{span}."
+        if years is not None else "SFRS dwelling-fire history."
+    )
+    by_lead = {projection["lead"]: projection for projection in projections}
     return {
-        "years_of_data": int(years) if years is not None else None,
-        "first_year": int(first) if first is not None else None,
-        "last_year": int(last) if last is not None else None,
-        "note": (
-            f"Based on {int(years)} years of SFRS dwelling fire data{span}."
-            if years is not None
-            else "Based on SFRS dwelling fire data."
-        ),
+        "model": "recency_weighted_linear_trend",
+        "source": "model",
+        "period_unit": "financial_year",
+        "projections": projections,
+        "range_method": "residual_spread",
+        "years_of_data": years,
+        "first_year": first,
+        "last_year": last,
+        "first_financial_year": first_period,
+        "last_financial_year": last_period,
+        "trend_pct": row.get("trend_pct"),
+        "data_quality": row.get("data_quality"),
+        "note": note if projections else "Ward projection unavailable.",
+        # Deprecated API aliases. These have always contained annual model steps.
+        **{key: by_lead.get(lead, {}).get("forecast") for lead, key in enumerate(legacy_keys, start=1)},
+        "forecast_lower": by_lead.get(1, {}).get("lower"),
+        "forecast_upper": by_lead.get(1, {}).get("upper"),
     }
+
+
+def selected_projection(prediction, lead):
+    return next((step for step in prediction["projections"] if step["lead"] == lead), None)
+
+
+def projection_text(prediction, lead):
+    if lead == 0:
+        return "Capacity planning uses the baseline risk score."
+    step = selected_projection(prediction, lead)
+    if step is None:
+        return "Ward projection unavailable."
+    if prediction["source"] == "model":
+        period = f"FY {step['financial_year']}" if step["financial_year"] else f"financial-year step {lead}"
+        label = f"{step['forecast']} dwelling fires projected for {period}"
+    else:
+        label = f"{step['forecast']} sample incidents projected for the six-month period ending at month {lead}"
+    if step["lower"] is not None and step["upper"] is not None:
+        label += f" (residual range {step['lower']}–{step['upper']})"
+    return f"{label}. {prediction['note']}"
 
 
 def ward_with_prediction(feature, use_model: bool = False):
@@ -269,23 +312,7 @@ def ward_with_prediction(feature, use_model: bool = False):
             else props["risk_score"]
         )
         wf = ward_forecasts.get(props["ward_id"], {})
-        if wf and wf.get("forecast_6mo") is not None:
-            model_prediction = {
-                "forecast_6mo":   round(float(wf["forecast_6mo"]), 1),
-                "forecast_12mo":  round(float(wf["forecast_12mo"]), 1) if wf.get("forecast_12mo") is not None else None,
-                "forecast_18mo":  round(float(wf["forecast_18mo"]), 1) if wf.get("forecast_18mo") is not None else None,
-                "forecast_lower": round(float(wf["forecast_lower"]), 1) if wf.get("forecast_lower") is not None else None,
-                "forecast_upper": round(float(wf["forecast_upper"]), 1) if wf.get("forecast_upper") is not None else None,
-                "trend_pct":      wf.get("trend_pct"),
-                "data_quality":   wf.get("data_quality", "sufficient"),
-                **forecast_basis(wf),
-            }
-        else:
-            model_prediction = {
-                "forecast_6mo": None, "forecast_12mo": None, "forecast_18mo": None,
-                "forecast_lower": None, "forecast_upper": None, "trend_pct": None,
-                "note": "Forecast unavailable — ward data pending",
-            }
+        model_prediction = annual_ward_prediction(wf)
         return {
             **feature,
             "properties": {
@@ -339,33 +366,26 @@ def filter_premises(
     return results
 
 
-def fallback_ward_explanation(feature):
+def fallback_ward_explanation(feature, lead=6):
     props = feature["properties"]
     drivers = props.get("drivers", [])
     driver1 = drivers[0] if drivers else "high deprivation"
     driver2 = drivers[1] if len(drivers) > 1 else "housing risk factors"
     forecast = prediction_for(feature)
-    f6 = forecast["forecast_6mo"]
-    fl = forecast.get("forecast_lower", f6)
-    fu = forecast.get("forecast_upper", f6)
-    trend = forecast.get("trend_pct", 0) or 0
-    trend_word = "rising" if trend > 0 else "falling" if trend < 0 else "stable"
     band = risk_band(props["risk_score"])
     priority = "high" if band == "high" else "near-term" if band == "medium" else "routine"
     return (
         f"• Prevention targeting: {props['ward_name']} is a {priority} prevention priority — deploy "
         f"community fire safety visits focused on {driver1} and {driver2}, prioritising Safe and Well "
         f"referrals for households flagged by social care and housing registers.\n"
-        f"• Capacity planning: Forecast {f6} incidents over the next 6 months (range {fl}–{fu}); "
-        f"trend is {trend_word} ({'+' if trend >= 0 else ''}{trend}%). Plan prevention team visits "
-        f"proportionally and review station response capacity for any demand increase.\n"
+        f"• Capacity planning: {projection_text(forecast, lead)}\n"
         f"• Key intervention: Prioritise smoke alarm installation and Home Fire Safety Check campaigns "
         f"targeting the highest-risk households in this ward. Re-assess quarterly as new incident and "
         f"housing data becomes available — this is a planning signal, not a prediction of specific incidents."
     )
 
 
-def fallback_ward_explanation_model(feature):
+def fallback_ward_explanation_model(feature, lead=1):
     props = feature["properties"]
     decile = props.get("simd_decile")
     model_score = (
@@ -379,19 +399,9 @@ def fallback_ward_explanation_model(feature):
     priority = "high" if band == "high" else "near-term" if band == "medium" else "routine"
 
     wf = ward_forecasts.get(props["ward_id"], {})
-    if wf and wf.get("forecast_6mo") is not None:
-        f6 = round(float(wf["forecast_6mo"]), 1)
-        fl = round(float(wf["forecast_lower"]), 1) if wf.get("forecast_lower") is not None else f6
-        fu = round(float(wf["forecast_upper"]), 1) if wf.get("forecast_upper") is not None else f6
-        trend = wf.get("trend_pct") or 0
-        trend_word = "rising" if trend > 0 else "falling" if trend < 0 else "stable"
-        basis = forecast_basis(wf)["note"].removeprefix("Based on ").rstrip(".")
-        capacity_line = (
-            f"{basis} forecasts {f6} incidents "
-            f"over the next 6 months (range {fl}–{fu}); demand trend is {trend_word} "
-            f"({'+' if trend >= 0 else ''}{trend}%) — plan prevention staffing and response capacity "
-            f"proportionally and flag to station commanders."
-        )
+    prediction = annual_ward_prediction(wf)
+    if lead == 0 or selected_projection(prediction, lead):
+        capacity_line = projection_text(prediction, lead)
         key_line = (
             f"Prioritise smoke alarm installation and Home Fire Safety Check campaigns in this ward; "
             f"risk score ({model_score}/100) is driven by SIMD 2020 deprivation (decile {decile}) — "
@@ -468,7 +478,7 @@ def fallback_zone_explanation(zone: Dict[str, Any]) -> str:
     )
 
 
-def _ai_context(mode, record, source: str = "mock") -> str:
+def _ai_context(mode, record, source: str = "mock", lead: Optional[int] = None) -> str:
     """Build the minimal one-line context string sent to OpenAI."""
     if mode == "ward":
         props = record["properties"]
@@ -479,23 +489,11 @@ def _ai_context(mode, record, source: str = "mock") -> str:
             wf = ward_forecasts.get(props["ward_id"], {})
             score = decile_to_model_score.get(int(decile), props["risk_score"]) if decile != "?" else props["risk_score"]
             band = risk_band(score)
-            if wf and wf.get("forecast_6mo") is not None:
-                f6 = round(float(wf["forecast_6mo"]), 1)
-                fl = round(float(wf["forecast_lower"]), 1) if wf.get("forecast_lower") is not None else f6
-                fu = round(float(wf["forecast_upper"]), 1) if wf.get("forecast_upper") is not None else f6
-                trend = wf.get("trend_pct") or 0
-                return (
-                    f"Ward: {props['ward_name']} | Risk: {score}/100 ({band}) | SIMD decile: {decile} "
-                    f"| Drivers: {d} | Forecast: {f6}/6mo (CI {fl}–{fu}) | Trend: {trend:+}%"
-                )
-            return f"Ward: {props['ward_name']} | Risk: {score}/100 ({band}) | SIMD decile: {decile} | Drivers: {d}"
-        pred = prediction_for(record)
-        f6 = pred.get("forecast_6mo")
-        trend = pred.get("trend_pct", 0) or 0
+            forecast = projection_text(annual_ward_prediction(wf), 1 if lead is None else lead)
+            return f"Ward: {props['ward_name']} | Risk: {score}/100 ({band}) | SIMD decile: {decile} | Drivers: {d} | {forecast}"
         score = props["risk_score"]
-        band = risk_band(score)
-        forecast_part = f" | Forecast: {f6}/6mo | Trend: {trend:+}%" if f6 is not None else ""
-        return f"Ward: {props['ward_name']} | Risk: {score}/100 ({band}) | Drivers: {d}{forecast_part}"
+        forecast = projection_text(prediction_for(record), 6 if lead is None else lead)
+        return f"Ward: {props['ward_name']} | Risk: {score}/100 ({risk_band(score)}) | Drivers: {d} | {forecast}"
 
     if mode == "zone":
         name = record.get("zonename") or record.get("zoneid", "zone")
@@ -525,7 +523,7 @@ def _ai_context(mode, record, source: str = "mock") -> str:
     )
 
 
-def openai_explanation(mode, record, source: str = "mock"):
+def openai_explanation(mode, record, source: str = "mock", lead: Optional[int] = None):
     if not os.getenv("OPENAI_API_KEY"):
         return None
 
@@ -534,7 +532,7 @@ def openai_explanation(mode, record, source: str = "mock"):
     except ImportError:
         return None
 
-    context = _ai_context(mode, record, source)
+    context = _ai_context(mode, record, source, lead)
     system_prompt = (
         "UK fire service analyst. Given area risk data, write exactly 3 bullet points (•) covering: "
         "(1) where to target prevention activity, (2) how to plan capacity from the forecast, "
@@ -573,6 +571,16 @@ def health():
     }
 
 
+def model_projection_periods():
+    periods = defaultdict(set)
+    for row in ward_forecasts.values():
+        for step in annual_ward_prediction(row)["projections"]:
+            years = periods[step["lead"]]
+            if step["financial_year"]:
+                years.add(step["financial_year"])
+    return periods
+
+
 @app.get("/api/status")
 def api_status():
     n_components = max((z.get("n_score_components") or 0 for z in zones), default=0)
@@ -581,6 +589,10 @@ def api_status():
         "zones_count": len(zones),
         "forecast_available": len(ward_forecasts) > 0,
         "ward_forecasts_count": len(ward_forecasts),
+        "ward_projection_periods": [
+            {"lead": lead, "financial_years": sorted(years)}
+            for lead, years in sorted(model_projection_periods().items())
+        ],
         "model_components_active": n_components,
         "model_components_total": 5,
     }
@@ -660,15 +672,16 @@ def explain(
     mode: str,
     record_id: str = Query(..., alias="id"),
     source: str = "mock",
+    lead: Optional[int] = Query(None, ge=0),
 ):
     if mode == "ward":
         record = wards_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Ward not found")
         fallback = (
-            fallback_ward_explanation_model(record)
+            fallback_ward_explanation_model(record, 1 if lead is None else lead)
             if source == "model"
-            else fallback_ward_explanation(record)
+            else fallback_ward_explanation(record, 6 if lead is None else lead)
         )
     elif mode == "zone":
         record = zones_by_id.get(record_id)
@@ -683,7 +696,7 @@ def explain(
     else:
         raise HTTPException(status_code=400, detail="Mode must be 'ward', 'zone', or 'premises'")
 
-    live_text = openai_explanation(mode, record, source=source)
+    live_text = openai_explanation(mode, record, source=source, lead=lead)
     return {
         "id": record_id,
         "mode": mode,
