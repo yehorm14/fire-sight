@@ -21,3 +21,9 @@ Copy `backend/.env.example` to `backend/.env` and `frontend/fire_website/.env.ex
 Set the project root to `frontend/fire_website` and `VITE_BACKEND_URL` to the Render URL, then redeploy.
 
 The default map uses the bundled Glasgow ward boundaries and requires no basemap key. To add a street basemap, use a provider-approved browser tile URL and its required attribution. Values prefixed with `VITE_` are included in the browser build. Use only public or origin-restricted provider credentials intended for browser use.
+
+## Liveness and model-data readiness
+
+- `GET /api/health` is liveness only (the process is up). It is the Render health check, so missing data does not restart-loop the service.
+- `GET /api/ready` validates the committed model data and returns 200 with `mode: "model"`, or 503 with `mode: "degraded"` and a `problems` list when an artefact is missing or malformed. `GET /api/status` also reports `data_mode`.
+- Set `FIRE_SIGHT_MOCK_MODE=1` to run the demo deliberately on sample data: `/api/ready` then returns 200 with `mode: "mock"` (problems, if any, are still listed), so it is distinguishable from a failed load.

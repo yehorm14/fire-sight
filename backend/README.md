@@ -108,6 +108,10 @@ Example:
 }
 ```
 
+### `GET /api/ready`
+
+Model-data readiness, separate from `/api/health`. Returns 200 `{"ready": true, "mode": "model", "mock_mode_enabled": false, "problems": []}` when the committed CSVs pass `data_contract.py`, or 503 with `mode: "degraded"` and the problems. With `FIRE_SIGHT_MOCK_MODE=1` it returns 200 with `mode: "mock"`.
+
 ### `GET /api/modes`
 
 Returns the two frontend modes:

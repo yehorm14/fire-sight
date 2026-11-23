@@ -17,6 +17,16 @@ The downloader fetches the SIMD 2020v2 indicator workbook and the SFRS fire stat
 
 To regenerate only the ward projection CSV, run `python data-pipeline/ward_forecasts.py` with the SFRS CSV in place. Each ward must have consecutive, unique financial-year observations.
 
+## Review regenerated data
+
+`data-pipeline/output/manifest.json` records the sources, financial-year range and a SHA-256 for each committed CSV. CI runs `python backend/data_contract.py` (and the same checks inside pytest), so no download is needed. It checks required columns, one forecast per ward in `glasgow_wards.geojson`, annual financial-year labels for each lead (`2023/2024`, not month bins), ordered bounds, and that the CSVs still match the manifest.
+
+When upstream inputs change:
+
+1. Run the regeneration steps above.
+2. `python backend/data_contract.py --write-manifest` (refuses to write if the contract fails).
+3. Review the `git diff` of both CSVs and the manifest (ward counts, projected years, large forecast moves) and update test expectations that name specific years or counts.
+
 ## Ward forecast CSV migration
 
 | Legacy column | Annual replacement |
