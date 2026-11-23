@@ -153,6 +153,67 @@ def build_decile_lookup(zone_list: List[Dict[str, Any]]) -> Dict[int, int]:
 
 decile_to_model_score: Dict[int, int] = build_decile_lookup(zones)
 
+# Official DataZone-to-ward lookup (see ward_aggregation.py). When it is absent the
+# "model" ward score is only a SIMD-decile proxy and is labelled as such.
+import ward_aggregation  # noqa: E402
+
+DATAZONE_WARD_LOOKUP_CSV = BASE_DIR.parent / "data-pipeline" / "reference" / "datazone_ward_lookup.csv"
+ward_lookup = ward_aggregation.load_lookup(DATAZONE_WARD_LOOKUP_CSV)
+ward_aggregates: Dict[str, Any] = {"wards": {}, "unmatched_zones": [], "wards_without_zones": []}
+if ward_lookup is not None:
+    ward_aggregates = ward_aggregation.aggregate_wards(
+        zones, ward_lookup["mapping"], list(wards_by_id)
+    )
+    if ward_aggregates["unmatched_zones"] or ward_aggregates["wards_without_zones"]:
+        logger.warning(
+            "DataZone-to-ward aggregation: %d unmatched zones, wards without zones: %s",
+            len(ward_aggregates["unmatched_zones"]),
+            ward_aggregates["wards_without_zones"],
+        )
+
+# Properties of the sample ward file that are not model evidence.
+SAMPLE_WARD_PROPS = (
+    "drivers", "population", "pct_over_65", "planned_homes",
+    "planning_applications", "incident_history_6mo", "incident_history_note",
+)
+
+
+def ward_model_score(props) -> int:
+    """Model score for a ward: geographic aggregate if mapped, else the SIMD-decile proxy."""
+    agg = ward_aggregates["wards"].get(props["ward_id"])
+    if agg is not None:
+        return agg["risk_score"]
+    decile = props.get("simd_decile")
+    if decile is not None:
+        return decile_to_model_score.get(int(decile), props["risk_score"])
+    return props["risk_score"]
+
+
+def ward_model_provenance(props) -> Dict[str, Any]:
+    agg = ward_aggregates["wards"].get(props["ward_id"])
+    if agg is not None:
+        return {
+            "score_method": "datazone_aggregate",
+            "score_method_note": f"{ward_aggregation.AGGREGATION_RULE} over {agg['zone_count']} DataZones.",
+            "drivers": agg["drivers"],
+            "zone_count": agg["zone_count"],
+        }
+    return {
+        "score_method": "simd_decile_proxy",
+        "score_method_note": (
+            "Proxy, not a geographic ward result: citywide mean model score of DataZones sharing the "
+            "ward's sample SIMD decile. Awaiting an official DataZone-to-ward lookup."
+        ),
+        "drivers": [],
+        "zone_count": None,
+    }
+
+
+def model_ward_props(props) -> Dict[str, Any]:
+    """Ward properties for model mode, without the sample (non-model) fields."""
+    kept = {k: v for k, v in props.items() if k not in SAMPLE_WARD_PROPS}
+    return {**kept, **ward_model_provenance(props)}
+
 app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
 
 
@@ -312,18 +373,13 @@ def ward_with_prediction(feature, use_model: bool = False):
     props = feature["properties"]
 
     if use_model and decile_to_model_score:
-        decile = props.get("simd_decile")
-        model_score = (
-            decile_to_model_score.get(int(decile), props["risk_score"])
-            if decile is not None
-            else props["risk_score"]
-        )
+        model_score = ward_model_score(props)
         wf = ward_forecasts.get(props["ward_id"], {})
         model_prediction = annual_ward_prediction(wf)
         return {
             **feature,
             "properties": {
-                **props,
+                **model_ward_props(props),
                 "id": props["ward_id"],
                 "name": props["ward_name"],
                 "mode": "ward",
@@ -395,14 +451,16 @@ def fallback_ward_explanation(feature, lead=6):
 def fallback_ward_explanation_model(feature, lead=1):
     props = feature["properties"]
     decile = props.get("simd_decile")
-    model_score = (
-        decile_to_model_score.get(int(decile), props["risk_score"])
-        if decile is not None
-        else props["risk_score"]
-    )
+    model_score = ward_model_score(props)
     band = risk_band(model_score)
-    drivers = props.get("drivers", [])
-    driver1 = drivers[0] if drivers else "high area deprivation"
+    provenance = ward_model_provenance(props)
+    drivers = provenance["drivers"]
+    driver1 = drivers[0] if drivers else "area deprivation"
+    basis = (
+        f"the {ward_aggregation.AGGREGATION_RULE} for this ward"
+        if provenance["score_method"] == "datazone_aggregate"
+        else f"a SIMD-decile proxy (decile {decile}), not a geographic ward aggregate"
+    )
     priority = "high" if band == "high" else "near-term" if band == "medium" else "routine"
 
     wf = ward_forecasts.get(props["ward_id"], {})
@@ -411,24 +469,24 @@ def fallback_ward_explanation_model(feature, lead=1):
         capacity_line = projection_text(prediction, lead)
         key_line = (
             f"Prioritise smoke alarm installation and Home Fire Safety Check campaigns in this ward; "
-            f"risk score ({model_score}/100) is driven by SIMD 2020 deprivation (decile {decile}) — "
+            f"risk score ({model_score}/100) is based on {basis} — "
             f"re-assess quarterly as additional Census 2022 and EPC data are loaded."
         )
     else:
         capacity_line = (
-            f"Allocate prevention capacity proportional to deprivation level (SIMD decile {decile}); "
+            f"Allocate prevention capacity proportional to the ward's model risk score; "
             f"coordinate with housing, health, and social care partners to maximise Safe and Well "
             f"referral volume."
         )
         key_line = (
             f"Target smoke detector installation and Home Fire Safety Checks in private rented and "
-            f"social housing stock; score uses SIMD 2020 deprivation — incident forecast will be "
+            f"social housing stock; score uses {basis} — incident forecast will be "
             f"available once SFRS ward data is matched."
         )
 
     return (
         f"• Prevention targeting: {props['ward_name']} scores {model_score}/100 ({priority} priority) "
-        f"based on SIMD 2020 deprivation data (decile {decile}) — prioritise proactive community safety "
+        f"based on {basis} — prioritise proactive community safety "
         f"outreach here, focusing on {driver1} as the primary modifiable risk factor.\n"
         f"• Capacity planning: {capacity_line}\n"
         f"• Key intervention: {key_line}"
@@ -494,7 +552,8 @@ def _ai_context(mode, record, source: str = "mock", lead: Optional[int] = None) 
         if source == "model":
             decile = props.get("simd_decile", "?")
             wf = ward_forecasts.get(props["ward_id"], {})
-            score = decile_to_model_score.get(int(decile), props["risk_score"]) if decile != "?" else props["risk_score"]
+            score = ward_model_score(props)
+            d = ", ".join(ward_model_provenance(props)["drivers"][:2]) or "deprivation"
             band = risk_band(score)
             forecast = projection_text(annual_ward_prediction(wf), 1 if lead is None else lead)
             return f"Ward: {props['ward_name']} | Risk: {score}/100 ({band}) | SIMD decile: {decile} | Drivers: {d} | {forecast}"
