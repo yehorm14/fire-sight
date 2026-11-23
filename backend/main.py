@@ -4,11 +4,12 @@ import logging
 import math
 import os
 import threading
+import time
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -614,11 +615,107 @@ def _explanation_cache_put(key, text):
             _explanation_cache.popitem(last=False)
 
 
-def openai_explanation(mode, record, source: str = "mock", lead: Optional[int] = None, record_id=None):
-    if not os.getenv("OPENAI_API_KEY"):
+# --- Spend controls for live explanations -------------------------------------
+# Live provider calls are OFF unless EXPLAIN_LIVE_ENABLED is truthy *and* a key is set,
+# so the public demo is template-only by default. When enabled, every provider call
+# must pass three gates (cache hits are free and skip them): a per-client sliding
+# window, a bounded number of in-flight calls, and a global budget per rolling day.
+# Rejected requests get the template text and never reach the provider. Limits are
+# in-process (per worker); CORS is not a control because non-browser clients ignore it.
+EXPLAIN_LIVE_ENV = "EXPLAIN_LIVE_ENABLED"
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.getenv(name, "")))
+    except ValueError:
+        return default
+
+
+def live_explanations_enabled() -> bool:
+    return (
+        os.getenv(EXPLAIN_LIVE_ENV, "").lower() in {"1", "true", "yes"}
+        and bool(os.getenv("OPENAI_API_KEY"))
+    )
+
+
+_spend_lock = threading.Lock()
+_client_calls: Dict[str, List[float]] = {}
+_global_calls: List[float] = []
+_inflight = 0
+_MAX_TRACKED_CLIENTS = 1024
+
+
+def _reset_spend_state() -> None:
+    global _inflight
+    with _spend_lock:
+        _client_calls.clear()
+        _global_calls.clear()
+        _inflight = 0
+
+
+def _acquire_provider_slot(client_id: str) -> bool:
+    """Reserve one provider call, or return False (nothing reserved) if any limit is hit."""
+    global _inflight
+    now = time.monotonic()
+    per_client = _env_int("EXPLAIN_CLIENT_LIMIT", 5)
+    window = _env_int("EXPLAIN_CLIENT_WINDOW_SECONDS", 60)
+    daily = _env_int("EXPLAIN_DAILY_BUDGET", 200)
+    max_inflight = _env_int("EXPLAIN_MAX_CONCURRENCY", 2)
+    with _spend_lock:
+        _global_calls[:] = [t for t in _global_calls if now - t < 86400]
+        recent = [t for t in _client_calls.get(client_id, []) if now - t < window]
+        if len(_client_calls) > _MAX_TRACKED_CLIENTS:
+            for key in [k for k, v in _client_calls.items() if not v or now - v[-1] >= window]:
+                del _client_calls[key]
+        if len(recent) >= per_client or len(_global_calls) >= daily or _inflight >= max_inflight:
+            _client_calls[client_id] = recent
+            return False
+        recent.append(now)
+        _client_calls[client_id] = recent
+        _global_calls.append(now)
+        _inflight += 1
+        return True
+
+
+def _release_provider_slot() -> None:
+    global _inflight
+    with _spend_lock:
+        _inflight = max(0, _inflight - 1)
+
+
+_data_version_cache: Optional[str] = None
+
+
+def explanation_data_version() -> str:
+    """Fingerprint of the verified data (manifest file hashes and periods) for cache keys."""
+    global _data_version_cache
+    if _data_version_cache is None:
+        try:
+            manifest = json.loads(data_contract.MANIFEST_JSON.read_text())
+            parts = {
+                "files": {k: v.get("sha256") for k, v in sorted(manifest.get("files", {}).items())},
+                "history": manifest.get("history"),
+                "projected": manifest.get("projected_financial_years"),
+            }
+            _data_version_cache = json.dumps(parts, sort_keys=True)
+        except (OSError, ValueError, AttributeError):
+            _data_version_cache = "unversioned"
+    return _data_version_cache
+
+
+def openai_explanation(
+    mode, record, source: str = "mock", lead: Optional[int] = None, record_id=None,
+    client_id: str = "unknown",
+):
+    if not live_explanations_enabled():
         return None
 
-    cache_key = (mode, record_id, source, lead) if record_id is not None else None
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    cache_key = (
+        (mode, record_id, source, lead, model, explanation_data_version())
+        if record_id is not None else None
+    )
     if cache_key is not None:
         cached = _explanation_cache_get(cache_key)
         if cached is not None:
@@ -636,10 +733,13 @@ def openai_explanation(mode, record, source: str = "mock", lead: Optional[int] =
         "(3) the single most impactful intervention. One sentence each. No incident predictions."
     )
 
+    if not _acquire_provider_slot(client_id):
+        return None
+
     try:
         client = OpenAI(timeout=15.0)
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": context},
@@ -653,6 +753,8 @@ def openai_explanation(mode, record, source: str = "mock", lead: Optional[int] =
         return text
     except Exception:
         return None
+    finally:
+        _release_provider_slot()
 
 
 @app.get("/")
@@ -803,6 +905,7 @@ def get_premises(premises_id: str):
 
 @app.get("/api/explain")
 def explain(
+    request: Request,
     mode: str,
     record_id: str = Query(..., alias="id"),
     source: str = "mock",
@@ -830,7 +933,10 @@ def explain(
     else:
         raise HTTPException(status_code=400, detail="Mode must be 'ward', 'zone', or 'premises'")
 
-    live_text = openai_explanation(mode, record, source=source, lead=lead, record_id=record_id)
+    client_id = request.client.host if request.client else "unknown"
+    live_text = openai_explanation(
+        mode, record, source=source, lead=lead, record_id=record_id, client_id=client_id
+    )
     return {
         "id": record_id,
         "mode": mode,

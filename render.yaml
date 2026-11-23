@@ -15,3 +15,5 @@ services:
         sync: false # optional; explanations fall back to templates without it
       - key: OPENAI_MODEL
         value: gpt-4o-mini
+      - key: EXPLAIN_LIVE_ENABLED
+        value: "0" # live explanations stay off until set to 1; see docs/DEPLOY.md for limits

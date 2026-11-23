@@ -8,7 +8,13 @@
 | `VITE_MAP_TILE_URL`, `VITE_MAP_TILE_ATTRIBUTION` | frontend, optional | Authorised public-browser tile URL template and required provider attribution. Set both to enable a basemap |
 | `VITE_EVENTS_API_URL` | frontend, optional | External events feed. Unset means built-in sample events |
 | `CORS_ORIGINS` | backend | Comma-separated allowed origins, default `http://localhost:5173,http://127.0.0.1:5173` |
-| `OPENAI_API_KEY`, `OPENAI_MODEL` | backend, optional | Live explanations, model defaults to `gpt-4o-mini` |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | backend, optional | Live explanations, model defaults to `gpt-4o-mini`. A key alone does nothing: also set `EXPLAIN_LIVE_ENABLED=1` |
+| `EXPLAIN_LIVE_ENABLED` | backend, optional | Default off: `/api/explain` serves templates only and never calls the provider. Set `1` to allow live calls |
+| `EXPLAIN_CLIENT_LIMIT`, `EXPLAIN_CLIENT_WINDOW_SECONDS` | backend, optional | Provider calls per client address per window, default 5 per 60 s |
+| `EXPLAIN_MAX_CONCURRENCY` | backend, optional | Provider calls in flight at once, default 2 |
+| `EXPLAIN_DAILY_BUDGET` | backend, optional | Provider calls per rolling 24 h across all clients, default 200 |
+
+Live explanation limits: they apply only before a provider call, so cache hits and template fallbacks are free. A request over any limit gets the template text (`source: "fallback"`) and the provider is not called. Counters are in memory and per worker, reset on restart, and the client address is the direct peer (behind a proxy this may be the proxy, so the per-client limit then acts as a shared limit). CORS does not limit spend because non-browser clients ignore it. Cached text is keyed by mode, id, source, lead, model and the data manifest fingerprint (file hashes and periods), so refreshed data never serves stale text.
 
 Copy `backend/.env.example` to `backend/.env` and `frontend/fire_website/.env.example` to `.env.local`.
 

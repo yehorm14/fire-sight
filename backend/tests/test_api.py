@@ -211,7 +211,9 @@ def _use_fake_openai(monkeypatch):
 
     _FakeOpenAI.calls = 0
     main._explanation_cache.clear()
+    main._reset_spend_state()
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("EXPLAIN_LIVE_ENABLED", "1")
     monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=_FakeOpenAI))
 
 
@@ -246,3 +248,76 @@ def test_explanation_cache_is_bounded(monkeypatch):
         main._explanation_cache_put(("ward", str(i), "mock", None), "x")
     assert len(main._explanation_cache) == 3
     assert ("ward", "0", "mock", None) not in main._explanation_cache
+
+
+def test_live_provider_is_off_by_default_even_with_key(client, monkeypatch):
+    _use_fake_openai(monkeypatch)
+    monkeypatch.delenv("EXPLAIN_LIVE_ENABLED")
+    body = client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()
+    assert body["source"] == "fallback"
+    assert _FakeOpenAI.calls == 0
+
+
+def test_client_quota_stops_provider_calls(client, monkeypatch):
+    _use_fake_openai(monkeypatch)
+    monkeypatch.setenv("EXPLAIN_CLIENT_LIMIT", "2")
+    base = f"/api/explain?mode=ward&id={GOVAN}&source=model"
+    sources = [client.get(f"{base}&lead={n}").json()["source"] for n in (1, 2, 3, 4)]
+    assert sources == ["live", "live", "fallback", "fallback"]
+    assert _FakeOpenAI.calls == 2
+    # a repeat of a cached request is still served without spending quota
+    assert client.get(f"{base}&lead=1").json()["source"] == "live"
+    assert _FakeOpenAI.calls == 2
+
+
+def test_global_budget_applies_across_clients(client, monkeypatch):
+    import main
+
+    _use_fake_openai(monkeypatch)
+    monkeypatch.setenv("EXPLAIN_DAILY_BUDGET", "1")
+    base = f"/api/explain?mode=ward&id={GOVAN}&source=model"
+    assert client.get(f"{base}&lead=1").json()["source"] == "live"
+    main._client_calls.clear()  # a different client address; the global budget still holds
+    assert client.get(f"{base}&lead=2").json()["source"] == "fallback"
+    assert _FakeOpenAI.calls == 1
+
+
+def test_concurrency_cap_rejects_without_provider_call(client, monkeypatch):
+    import main
+
+    _use_fake_openai(monkeypatch)
+    monkeypatch.setenv("EXPLAIN_MAX_CONCURRENCY", "1")
+    assert main._acquire_provider_slot("other")  # one call already in flight
+    body = client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()
+    assert body["source"] == "fallback"
+    assert _FakeOpenAI.calls == 0
+    main._release_provider_slot()
+    assert client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()["source"] == "live"
+
+
+def test_slot_released_after_provider_error(client, monkeypatch):
+    import main
+
+    _use_fake_openai(monkeypatch)
+
+    def boom(self, **kwargs):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(_FakeOpenAI, "create", boom)
+    body = client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()
+    assert body["source"] == "fallback"
+    assert main._inflight == 0
+
+
+def test_cache_key_includes_data_version_and_model(client, monkeypatch):
+    import main
+
+    _use_fake_openai(monkeypatch)
+    url = f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1"
+    client.get(url)
+    monkeypatch.setattr(main, "_data_version_cache", "other-data")
+    client.get(url)
+    assert _FakeOpenAI.calls == 2
+    monkeypatch.setenv("OPENAI_MODEL", "other-model")
+    client.get(url)
+    assert _FakeOpenAI.calls == 3
