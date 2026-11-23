@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { GeoJSON } from 'react-leaflet';
 import { BACKEND_URL } from '../../config';
+import { describeFailure } from '../../apiError';
 
 
 const getRiskColor = (riskFactor) => {
@@ -94,7 +95,9 @@ const RiskLayer = ({ lead = 0, hoveredRiskBand = null, dataSource = 'mock' }) =>
           `${BACKEND_URL}/api/strategic/wards.geojson?source=${dataSource}`
         );
         if (!response.ok) {
-          throw new Error('Failed to fetch ward data');
+          const message = await describeFailure(response, 'Could not load Glasgow ward data from the backend.');
+          if (!cancelled) setError(message);
+          return;
         }
 
         const payload = await response.json();
@@ -225,7 +228,11 @@ const RiskLayer = ({ lead = 0, hoveredRiskBand = null, dataSource = 'mock' }) =>
             const response = await fetch(
               `${BACKEND_URL}/api/explain?mode=${encodeURIComponent(mode)}&id=${encodeURIComponent(id)}&source=${encodeURIComponent(dataSource)}&lead=${requestedLead}`
             );
-            if (!response.ok) throw new Error('Explain request failed');
+            if (!response.ok) {
+              const message = await describeFailure(response, 'Could not load the AI overview right now. Please try again.');
+              if (isCurrent()) textEl.textContent = message;
+              return;
+            }
             const payload = await response.json();
             if (!isCurrent()) return;
 

@@ -246,3 +246,83 @@ def test_explanation_cache_is_bounded(monkeypatch):
         main._explanation_cache_put(("ward", str(i), "mock", None), "x")
     assert len(main._explanation_cache) == 3
     assert ("ward", "0", "mock", None) not in main._explanation_cache
+
+
+# --- model-source contract -------------------------------------------------
+
+def _all_source_urls():
+    return [
+        ("/api/strategic/wards", {}),
+        ("/api/strategic/wards.geojson", {}),
+        (f"/api/strategic/wards/{GOVAN}", {}),
+        ("/api/explain", {"mode": "ward", "id": GOVAN}),
+    ]
+
+
+def test_every_endpoint_reports_resolved_source_and_version(client):
+    for url, extra in _all_source_urls():
+        model = client.get(url, params={**extra, "source": "model"})
+        assert model.status_code == 200, url
+        body = model.json()
+        if isinstance(body, list):
+            body = body[0]
+        meta = body.get("properties", body)
+        assert meta["data_source"] == "model", url
+        assert len(meta["source_version"]) == 12, url
+        mock = client.get(url, params={**extra, "source": "mock"})
+        body = mock.json()
+        if isinstance(body, list):
+            body = body[0]
+        meta = body.get("properties", body)
+        assert (meta["data_source"], meta["source_version"]) == ("mock", "sample"), url
+
+
+def test_unknown_source_is_rejected_everywhere(client):
+    for url, extra in _all_source_urls():
+        assert client.get(url, params={**extra, "source": "bogus"}).status_code == 400, url
+
+
+def test_model_unavailable_is_503_never_sample_data(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "decile_to_model_score", {})
+    for url, extra in _all_source_urls():
+        res = client.get(url, params={**extra, "source": "model"})
+        assert res.status_code == 503, url
+        detail = res.json()["detail"]
+        assert detail["error"] == "model_unavailable"
+        assert "model score lookup is empty" in detail["reasons"]
+        # demo mode is intentional and keeps working
+        assert client.get(url, params={**extra, "source": "mock"}).status_code == 200, url
+
+
+def test_missing_ward_forecasts_are_unavailable(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "ward_forecasts", {})
+    for url, extra in _all_source_urls():
+        assert client.get(url, params={**extra, "source": "model"}).status_code == 503, url
+
+
+def test_partial_forecasts_fail_collection_but_serve_covered_ward(client, monkeypatch):
+    import main
+
+    only_govan = {GOVAN: main.ward_forecasts[GOVAN]}
+    monkeypatch.setattr(main, "ward_forecasts", only_govan)
+    res = client.get("/api/strategic/wards.geojson", params={"source": "model"})
+    assert res.status_code == 503
+    assert "no ward forecast for" in res.json()["detail"]["reasons"][0]
+    assert client.get("/api/strategic/wards", params={"source": "model"}).status_code == 503
+    assert client.get(f"/api/strategic/wards/{GOVAN}", params={"source": "model"}).status_code == 200
+    assert client.get(f"/api/strategic/wards/{NORTH_EAST}", params={"source": "model"}).status_code == 503
+
+
+def test_sources_agree_across_list_geojson_detail_and_explain(client):
+    listed = {w["ward_id"]: w for w in client.get("/api/strategic/wards", params={"source": "model"}).json()}
+    geo = client.get("/api/strategic/wards.geojson", params={"source": "model"}).json()
+    detail = client.get(f"/api/strategic/wards/{GOVAN}", params={"source": "model"}).json()["properties"]
+    explain = client.get("/api/explain", params={"mode": "ward", "id": GOVAN, "source": "model"}).json()
+    by_id = {f["properties"]["id"]: f["properties"] for f in geo["features"]}
+    assert listed[GOVAN]["risk_score"] == by_id[GOVAN]["risk_score"] == detail["risk_score"]
+    assert listed[GOVAN]["data_source"] == explain["data_source"] == geo["data_source"] == "model"
+    assert listed[GOVAN]["source_version"] == explain["source_version"] == geo["source_version"] == detail["source_version"]

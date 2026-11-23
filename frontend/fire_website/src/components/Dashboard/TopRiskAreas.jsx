@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import './TopRiskAreas.css';
 import { BACKEND_URL } from '../../config';
+import { describeFailure } from '../../apiError';
 
 
 const TopRiskAreas = ({ dataSource = 'mock', lead = 0 }) => {
@@ -14,7 +15,11 @@ const TopRiskAreas = ({ dataSource = 'mock', lead = 0 }) => {
       try {
         const path = dataSource === 'model' ? '/api/zones/top?n=5' : '/api/strategic/wards';
         const response = await fetch(`${BACKEND_URL}${path}`, { signal: controller.signal });
-        if (!response.ok) throw new Error('Risk rankings request failed');
+        if (!response.ok) {
+          const message = await describeFailure(response, 'Could not load the risk rankings.');
+          if (!controller.signal.aborted) setResult({ status: 'error', areas: [], message });
+          return;
+        }
         const data = await response.json();
         const areas = dataSource === 'model'
           ? data.map((zone) => ({
@@ -61,7 +66,7 @@ const TopRiskAreas = ({ dataSource = 'mock', lead = 0 }) => {
       {result.status === 'loading' && <p className="top-areas-status" role="status">Loading…</p>}
       {result.status === 'error' && (
         <>
-          <p className="top-areas-status" role="alert">Could not load the risk rankings.</p>
+          <p className="top-areas-status" role="alert">{result.message || 'Could not load the risk rankings.'}</p>
           <button type="button" className="top-area-ai-btn" onClick={retry}>Retry</button>
         </>
       )}
@@ -102,7 +107,10 @@ function AreaDetails({ area, dataSource, lead }) {
     try {
       const query = new URLSearchParams({ mode: area.mode, id: area.id, source: dataSource, lead });
       const response = await fetch(`${BACKEND_URL}/api/explain?${query}`);
-      if (!response.ok) throw new Error('Explanation request failed');
+      if (!response.ok) {
+        setExplanation(await describeFailure(response, 'Could not load recommendations right now.'));
+        return;
+      }
       const data = await response.json();
       setExplanation(data.text || 'No recommendation returned.');
     } catch {

@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import json
 import logging
 import math
@@ -370,10 +371,63 @@ def projection_text(prediction, lead):
     return f"{label}. {prediction['note']}"
 
 
+SOURCES = ("mock", "model")
+
+
+def model_source_version() -> Optional[str]:
+    """Short content hash of the loaded model CSVs, so clients can tell which data produced a result."""
+    try:
+        digest = hashlib.sha256()
+        for path in (WARD_FORECASTS_CSV, ZONES_CSV):
+            digest.update(data_contract.sha256_of(path).encode())
+        return digest.hexdigest()[:12]
+    except OSError:
+        return None
+
+
+def model_unavailable_reasons(ward_ids: Optional[List[str]] = None) -> List[str]:
+    """Why model results cannot be served right now (empty when they can)."""
+    reasons = []
+    if not zones:
+        reasons.append("DataZone scores are not loaded")
+    if not decile_to_model_score:
+        reasons.append("model score lookup is empty")
+    if not ward_forecasts:
+        reasons.append("ward forecasts are not loaded")
+    elif ward_ids is not None:
+        missing = sorted(w for w in ward_ids if w not in ward_forecasts)
+        if missing:
+            reasons.append(f"no ward forecast for: {', '.join(missing)}")
+    return reasons
+
+
+def resolve_source(source: str, ward_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Single place that validates ?source= for every endpoint.
+
+    Returns {"data_source", "source_version"}. Unknown sources are 400; model requests
+    that cannot be served raise 503 instead of falling back to sample data.
+    """
+    if source not in SOURCES:
+        raise HTTPException(status_code=400, detail=f"source must be one of: {', '.join(SOURCES)}")
+    if source == "mock":
+        return {"data_source": "mock", "source_version": "sample"}
+    reasons = model_unavailable_reasons(ward_ids)
+    if reasons:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "model_unavailable",
+                "message": "Model data is unavailable; use source=mock for the sample demo.",
+                "reasons": reasons,
+            },
+        )
+    return {"data_source": "model", "source_version": model_source_version()}
+
+
 def ward_with_prediction(feature, use_model: bool = False):
     props = feature["properties"]
 
-    if use_model and decile_to_model_score:
+    if use_model:
         model_score = ward_model_score(props)
         wf = ward_forecasts.get(props["ward_id"], {})
         model_prediction = annual_ward_prediction(wf)
@@ -753,16 +807,39 @@ def modes():
     }
 
 
+ALL_WARD_IDS = list(wards_by_id)
+
+
 @app.get("/api/strategic/wards")
-def list_strategic_wards():
-    return [ward_summary(feature) for feature in wards_geojson.get("features", [])]
+def list_strategic_wards(source: str = "mock"):
+    resolved = resolve_source(source, ALL_WARD_IDS)
+    if resolved["data_source"] == "mock":
+        return [{**ward_summary(feature), **resolved} for feature in wards_geojson.get("features", [])]
+    summaries = []
+    for feature in wards_geojson.get("features", []):
+        props = ward_with_prediction(feature, use_model=True)["properties"]
+        summaries.append({
+            "id": props["id"],
+            "name": props["name"],
+            "mode": "ward",
+            "ward_id": props["id"],
+            "ward_name": props["name"],
+            "risk_score": props["risk_score"],
+            "risk_band": props["risk_band"],
+            "drivers": props["drivers"],
+            "prediction": props["prediction"],
+            **resolved,
+        })
+    return summaries
 
 
 @app.get("/api/strategic/wards.geojson")
 def get_strategic_wards_geojson(source: str = "mock"):
-    use_model = source == "model" and bool(decile_to_model_score)
+    resolved = resolve_source(source, ALL_WARD_IDS)
+    use_model = resolved["data_source"] == "model"
     return {
         **wards_geojson,
+        **resolved,
         "features": [
             ward_with_prediction(feature, use_model=use_model)
             for feature in wards_geojson.get("features", [])
@@ -775,8 +852,10 @@ def get_strategic_ward(ward_id: str, source: str = "mock"):
     ward = wards_by_id.get(ward_id)
     if ward is None:
         raise HTTPException(status_code=404, detail="Ward not found")
-    use_model = source == "model" and bool(decile_to_model_score)
-    return ward_with_prediction(ward, use_model=use_model)
+    resolved = resolve_source(source, [ward_id])
+    result = ward_with_prediction(ward, use_model=resolved["data_source"] == "model")
+    result["properties"]["source_version"] = resolved["source_version"]
+    return result
 
 
 @app.get("/api/premises")
@@ -808,13 +887,16 @@ def explain(
     source: str = "mock",
     lead: Optional[int] = Query(None, ge=0),
 ):
+    if mode not in ("ward", "zone", "premises"):
+        raise HTTPException(status_code=400, detail="Mode must be 'ward', 'zone', or 'premises'")
+    resolved = resolve_source(source, [record_id] if mode == "ward" and record_id in wards_by_id else None)
     if mode == "ward":
         record = wards_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Ward not found")
         fallback = (
             fallback_ward_explanation_model(record, 1 if lead is None else lead)
-            if source == "model"
+            if resolved["data_source"] == "model"
             else fallback_ward_explanation(record, 6 if lead is None else lead)
         )
     elif mode == "zone":
@@ -834,7 +916,7 @@ def explain(
     return {
         "id": record_id,
         "mode": mode,
-        "data_source": source,
+        **resolved,
         "source": "live" if live_text else "fallback",
         "text": live_text or fallback,
     }
