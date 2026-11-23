@@ -37,7 +37,7 @@ import data_contract  # noqa: E402  (after dotenv so env settings apply)
 MOCK_MODE_ENV = "FIRE_SIGHT_MOCK_MODE"
 
 # Comma-separated list of allowed browser origins, e.g.
-# CORS_ORIGINS=https://fire-sight.vercel.app,http://localhost:5173
+# CORS_ORIGINS=https://<your-frontend-host>,http://localhost:5173
 DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 
 

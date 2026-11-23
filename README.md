@@ -46,6 +46,10 @@ The default dashboard shows the ward boundaries with no external basemap.
 
 The Mock source and the premises and event overlays use illustrative sample data, not real premises or incidents. Model mode uses the pipeline output.
 
+## Live demo
+
+No hosted demo URL is published yet. To publish one, follow the checklist in [docs/DEPLOY.md](docs/DEPLOY.md#publishing-the-demo-checklist) and verify it with `python scripts/smoke_check.py --api <api-url> --frontend <frontend-url>`; no credentials or AI key are needed because explanations fall back to built-in text. The dashboard labels Model, Mock and illustrative premises/event data in a notice under the header.
+
 ## Tech stack
 
 - Backend: Python 3.13, FastAPI, pandas, optional OpenAI API

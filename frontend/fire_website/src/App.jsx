@@ -126,6 +126,13 @@ function App() {
         </div>
       </header>
 
+      <p className="source-notice" role="note">
+        {dataSource === 'model'
+          ? 'Model: DataZone risk scores from SIMD 2020 indicators and linear-trend ward projections of SFRS dwelling-fire counts (annual financial years). The projections are not calibrated forecasts.'
+          : 'Mock: illustrative sample values for demonstration, not real risk scores or forecasts.'}
+        {' '}Premises and event markers are illustrative sample data in both modes. Explanations use built-in template text unless an AI provider is configured.
+      </p>
+
       <main className="app-main">
         <div className="timeframe-control">
           <label htmlFor="timeframe-select">Ward projection</label>
