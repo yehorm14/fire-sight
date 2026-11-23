@@ -19,6 +19,7 @@ jobs:
             backend/requirements.txt
             data-pipeline/requirements.txt
       - run: pip install -r requirements.txt
+      - run: python backend/data_contract.py
       - run: python -m pytest -q
 
   frontend:

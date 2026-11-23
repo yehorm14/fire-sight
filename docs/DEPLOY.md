@@ -41,3 +41,9 @@ python scripts/smoke_check.py --api https://<api-host> --frontend https://<front
 ```
 
 It only issues GET and OPTIONS requests and needs no credentials. It checks API liveness, that the model is loaded, 23 wards for both Model and Mock, a working explanation (template fallback is accepted), that the frontend serves its app shell, and that CORS allows the frontend origin. It exits non-zero on failure. `--frontend` is optional.
+
+## Liveness and model-data readiness
+
+- `GET /api/health` is liveness only (the process is up). It is the Render health check, so missing data does not restart-loop the service.
+- `GET /api/ready` validates the committed model data and returns 200 with `mode: "model"`, or 503 with `mode: "degraded"` and a `problems` list when an artefact is missing or malformed. `GET /api/status` also reports `data_mode`.
+- Set `FIRE_SIGHT_MOCK_MODE=1` to run the demo deliberately on sample data: `/api/ready` then returns 200 with `mode: "mock"` (problems, if any, are still listed), so it is distinguishable from a failed load.

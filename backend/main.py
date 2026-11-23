@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -28,6 +29,12 @@ WARD_FORECASTS_CSV = BASE_DIR.parent / "data-pipeline" / "output" / "glasgow_war
 
 if load_dotenv is not None:
     load_dotenv(BASE_DIR / ".env")
+
+import data_contract  # noqa: E402  (after dotenv so env settings apply)
+
+# Set FIRE_SIGHT_MOCK_MODE=1 to deliberately run the demo on sample data only.
+# Without it, missing or malformed model data is reported as a failure by /api/ready.
+MOCK_MODE_ENV = "FIRE_SIGHT_MOCK_MODE"
 
 # Comma-separated list of allowed browser origins, e.g.
 # CORS_ORIGINS=https://<your-frontend-host>,http://localhost:5173
@@ -560,8 +567,41 @@ def read_root():
     return {"message": "FireSight backend is running"}
 
 
+def readiness_report() -> Dict[str, Any]:
+    """Model-data readiness, separate from liveness (/api/health).
+
+    mode is "model" when data is healthy, "mock" when mock mode was deliberately
+    enabled, and "degraded" when model data failed to load or validate.
+    """
+    problems = (
+        data_contract.check_ward_forecasts(WARD_FORECASTS_CSV, WARDS_FILE)
+        + data_contract.check_zones(ZONES_CSV)
+        + data_contract.check_manifest(files=[WARD_FORECASTS_CSV, ZONES_CSV])
+    )
+    if not problems and not ward_forecasts:
+        problems.append("ward forecasts were not loaded into the API")
+    if not problems and not zones:
+        problems.append("DataZone scores were not loaded into the API")
+    mock_enabled = os.getenv(MOCK_MODE_ENV, "").lower() in {"1", "true", "yes"}
+    mode = "mock" if mock_enabled else ("degraded" if problems else "model")
+    return {
+        "ready": mode != "degraded",
+        "mode": mode,
+        "mock_mode_enabled": mock_enabled,
+        "problems": problems,
+    }
+
+
+@app.get("/api/ready")
+def ready():
+    """Readiness: 200 when model data is valid or mock mode is on, 503 when model data failed."""
+    report = readiness_report()
+    return JSONResponse(report, status_code=200 if report["ready"] else 503)
+
+
 @app.get("/api/health")
 def health():
+    """Liveness only: the process is up. Use /api/ready for model-data readiness."""
     return {
         "status": "ok",
         "wards_loaded": len(wards_by_id),
@@ -595,6 +635,7 @@ def api_status():
         ],
         "model_components_active": n_components,
         "model_components_total": 5,
+        "data_mode": readiness_report()["mode"],
     }
 
 
