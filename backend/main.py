@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import os
+import threading
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -534,20 +535,24 @@ def _ai_context(mode, record, source: str = "mock", lead: Optional[int] = None) 
 # (mode, record id, source, lead). Failures are never cached so they can retry.
 EXPLANATION_CACHE_MAX = 256
 _explanation_cache: "OrderedDict[tuple, str]" = OrderedDict()
+# FastAPI runs sync endpoints in a threadpool, so guard the LRU bookkeeping.
+_explanation_cache_lock = threading.Lock()
 
 
 def _explanation_cache_get(key):
-    text = _explanation_cache.get(key)
-    if text is not None:
-        _explanation_cache.move_to_end(key)
-    return text
+    with _explanation_cache_lock:
+        text = _explanation_cache.get(key)
+        if text is not None:
+            _explanation_cache.move_to_end(key)
+        return text
 
 
 def _explanation_cache_put(key, text):
-    _explanation_cache[key] = text
-    _explanation_cache.move_to_end(key)
-    while len(_explanation_cache) > EXPLANATION_CACHE_MAX:
-        _explanation_cache.popitem(last=False)
+    with _explanation_cache_lock:
+        _explanation_cache[key] = text
+        _explanation_cache.move_to_end(key)
+        while len(_explanation_cache) > EXPLANATION_CACHE_MAX:
+            _explanation_cache.popitem(last=False)
 
 
 def openai_explanation(mode, record, source: str = "mock", lead: Optional[int] = None, record_id=None):
