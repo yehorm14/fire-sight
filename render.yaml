@@ -10,7 +10,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.13.5
       - key: CORS_ORIGINS
-        sync: false # set to the Vercel URL, e.g. https://fire-sight.vercel.app
+        sync: false # set to the Vercel URL, e.g. https://<your-frontend-host> (no trailing slash)
       - key: OPENAI_API_KEY
         sync: false # optional; explanations fall back to templates without it
       - key: OPENAI_MODEL

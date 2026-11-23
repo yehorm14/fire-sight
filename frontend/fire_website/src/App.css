@@ -29,6 +29,23 @@ body, html {
   color: #e2e8f0;
 }
 
+/* ── Data source notice ── */
+.source-notice {
+  margin: 0;
+  padding: 6px 22px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  background: #fef3c7;
+  color: #78350f;
+  border-bottom: 1px solid #fcd34d;
+}
+
+.app-container.night-mode .source-notice {
+  background: #2a2110;
+  color: #fcd34d;
+  border-bottom-color: #5c4a14;
+}
+
 /* ── Header ── */
 .app-header {
   padding: 14px 22px;
