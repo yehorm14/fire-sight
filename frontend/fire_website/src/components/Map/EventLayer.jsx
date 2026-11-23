@@ -1,7 +1,8 @@
 import { Marker, Pane, Popup } from 'react-leaflet';
 import { useEffect, useMemo, useState } from 'react';
 import L from 'leaflet';
-import { EVENTS_API_URL } from '../../config';
+import { EVENTS_API_URL, EVENTS_DEMO_MODE } from '../../config';
+import { isEventInWindow, parseEventRange } from './eventFeed';
 
 /** Only show “big” events (major crowd / demand signal). */
 const MIN_ATTENDANCE = 1000;
@@ -18,7 +19,7 @@ const eventAlertIcon = L.divIcon({
   popupAnchor: [0, -22]
 });
 
-// Illustrative sample events, used when no VITE_EVENTS_API_URL is configured.
+// Illustrative sample events, shown only in explicit demo mode (VITE_EVENTS_DEMO=true).
 // Dates are offsets from today so the demo always has upcoming events to show.
 const localDateString = (daysFromToday) => {
   const d = new Date();
@@ -47,12 +48,6 @@ const TIMEFRAME_TO_MONTHS = {
   'In 1.5 years': 18
 };
 
-const addMonths = (date, months) => {
-  const nextDate = new Date(date);
-  nextDate.setMonth(nextDate.getMonth() + months);
-  return nextDate;
-};
-
 const normalizeEvent = (event, idx) => {
   const lat = Number(event.lat ?? event.latitude ?? event.coordinates?.lat);
   const lng = Number(event.lng ?? event.longitude ?? event.coordinates?.lng);
@@ -67,6 +62,7 @@ const normalizeEvent = (event, idx) => {
     name: event.name ?? event.title ?? 'Unnamed event',
     location: event.location ?? event.venue ?? 'Location pending',
     date,
+    endDate: event.endDate ?? event.end_date ?? undefined,
     estimatedAttendance: Number(
       event.estimatedAttendance ?? event.attendance ?? event.expectedAttendance ?? 0
     ),
@@ -77,15 +73,25 @@ const normalizeEvent = (event, idx) => {
 
 const EventLayer = ({ timeFrame }) => {
   const [events, setEvents] = useState([]);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchEvents = async () => {
-      if (!EVENTS_API_URL) {
+      if (EVENTS_DEMO_MODE) {
         setEvents(bigEvents(buildFallbackEvents()));
+        setStatus('ready');
         return;
       }
+      if (!EVENTS_API_URL) {
+        // No feed configured and not in demo mode: show nothing rather than invented events.
+        setEvents([]);
+        setStatus('ready');
+        return;
+      }
+      setStatus('loading');
       try {
         const response = await fetch(EVENTS_API_URL);
         if (!response.ok) {
@@ -93,17 +99,25 @@ const EventLayer = ({ timeFrame }) => {
         }
 
         const payload = await response.json();
-        const rawEvents = Array.isArray(payload) ? payload : payload.events ?? [];
+        const rawEvents = Array.isArray(payload) ? payload : payload.events;
+        if (!Array.isArray(rawEvents)) {
+          throw new Error('Unexpected events payload');
+        }
         const parsedEvents = bigEvents(
-          rawEvents.map((event, idx) => normalizeEvent(event, idx)).filter(Boolean)
+          rawEvents
+            .map((event, idx) => normalizeEvent(event, idx))
+            .filter((event) => event && parseEventRange(event.date, event.endDate))
         );
 
         if (!cancelled) {
-          setEvents(parsedEvents.length > 0 ? parsedEvents : bigEvents(buildFallbackEvents()));
+          // A successful empty feed stays empty.
+          setEvents(parsedEvents);
+          setStatus('ready');
         }
       } catch {
         if (!cancelled) {
-          setEvents(bigEvents(buildFallbackEvents()));
+          setEvents([]);
+          setStatus('error');
         }
       }
     };
@@ -113,20 +127,29 @@ const EventLayer = ({ timeFrame }) => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   const filteredEvents = useMemo(() => {
     const months = TIMEFRAME_TO_MONTHS[timeFrame] ?? 1;
     const now = new Date();
-    const endDate = addMonths(now, months);
-
-    return events.filter((event) => {
-      const eventDate = new Date(event.date);
-      return eventDate >= now && eventDate <= endDate;
-    });
+    return events.filter((event) => isEventInWindow(event, now, months));
   }, [events, timeFrame]);
 
   return (
+    <>
+      {EVENTS_DEMO_MODE && (
+        <div className="event-feed-status event-feed-demo" role="note">
+          Demo mode: sample events, not real data
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="event-feed-status event-feed-error" role="alert">
+          Events could not be loaded.{' '}
+          <button type="button" onClick={() => setAttempt((n) => n + 1)}>
+            Retry
+          </button>
+        </div>
+      )}
     <Pane name="eventMarkersPane" style={{ zIndex: 550 }}>
       {filteredEvents.map((event) => (
         <Marker
@@ -156,7 +179,7 @@ const EventLayer = ({ timeFrame }) => {
                 </p>
                 <p>
                   <span>Date</span>
-                  <strong>{new Date(event.date).toLocaleDateString()}</strong>
+                  <strong>{parseEventRange(event.date)?.start.toLocaleDateString()}</strong>
                 </p>
                 <p>
                   <span>Estimated Attendance</span>
@@ -172,6 +195,7 @@ const EventLayer = ({ timeFrame }) => {
         </Marker>
       ))}
     </Pane>
+    </>
   );
 };
 

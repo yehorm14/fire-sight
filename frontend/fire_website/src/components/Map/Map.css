@@ -721,3 +721,29 @@
 .night-mode .risk-map-container.leaflet-container {
   background: #202a37;
 }
+
+/* ── Event feed status (demo label / load failure) ── */
+.event-feed-status {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: #fff7e6;
+  color: #7a4b00;
+  border: 1px solid #f0c36d;
+}
+
+.event-feed-error {
+  background: #fdecec;
+  color: #8a1c1c;
+  border-color: #e8a3a3;
+}
+
+.event-feed-status button {
+  margin-left: 4px;
+  cursor: pointer;
+}
