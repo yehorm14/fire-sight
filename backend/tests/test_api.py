@@ -186,3 +186,63 @@ def test_mock_forecast_periods_are_sample_months(client):
     assert mock["period_unit"] == "month"
     assert [step["lead"] for step in mock["projections"]] == [6, 12, 18]
     assert all("financial_year" not in step for step in mock["projections"])
+
+
+class _FakeOpenAI:
+    """Stand-in for openai.OpenAI that counts completion calls."""
+
+    calls = 0
+
+    def __init__(self, *args, **kwargs):
+        self.chat = type("Chat", (), {"completions": self})()
+
+    def create(self, **kwargs):
+        _FakeOpenAI.calls += 1
+        content = f"• live explanation #{_FakeOpenAI.calls}"
+        message = type("M", (), {"content": content})()
+        return type("R", (), {"choices": [type("C", (), {"message": message})()]})()
+
+
+def _use_fake_openai(monkeypatch):
+    import sys
+    import types
+
+    import main
+
+    _FakeOpenAI.calls = 0
+    main._explanation_cache.clear()
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=_FakeOpenAI))
+
+
+def test_explanation_is_cached_for_identical_requests(client, monkeypatch):
+    _use_fake_openai(monkeypatch)
+    url = f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1"
+    first = client.get(url).json()
+    second = client.get(url).json()
+    assert first["source"] == "live"
+    assert second["text"] == first["text"]
+    assert _FakeOpenAI.calls == 1
+
+
+def test_explanation_cache_separates_wards_and_leads(client, monkeypatch):
+    _use_fake_openai(monkeypatch)
+    base = "/api/explain?mode=ward"
+    texts = {
+        client.get(f"{base}&id={GOVAN}&source=model&lead=1").json()["text"],
+        client.get(f"{base}&id={GOVAN}&source=model&lead=2").json()["text"],
+        client.get(f"{base}&id={NORTH_EAST}&source=model&lead=1").json()["text"],
+    }
+    assert len(texts) == 3
+    assert _FakeOpenAI.calls == 3
+
+
+def test_explanation_cache_is_bounded(monkeypatch):
+    import main
+
+    main._explanation_cache.clear()
+    monkeypatch.setattr(main, "EXPLANATION_CACHE_MAX", 3)
+    for i in range(5):
+        main._explanation_cache_put(("ward", str(i), "mock", None), "x")
+    assert len(main._explanation_cache) == 3
+    assert ("ward", "0", "mock", None) not in main._explanation_cache
