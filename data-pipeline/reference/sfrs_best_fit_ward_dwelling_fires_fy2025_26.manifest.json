@@ -1,0 +1,103 @@
+{
+  "source_id": "sfrs_best_fit_ward_dwelling_fires_fy2025_26",
+  "retrieved_on": "2026-11-26",
+  "outcome": "SFRS-attended incidents classified Dwelling Fire, all accident statuses",
+  "unit": "dwelling fires per ward per financial year",
+  "financial_year": {
+    "first": "2009/2010",
+    "last": "2025/2026",
+    "starts": "1 April",
+    "ends": "31 March"
+  },
+  "geography": {
+    "region": "Scotland",
+    "assignment": "whole 2022 DataZone to published electoral ward",
+    "glasgow_map_edition": "WD24",
+    "councils": 32,
+    "wards": 355,
+    "datazones": 7392,
+    "glasgow_council_code": "S12000049",
+    "glasgow_wards": 23
+  },
+  "sources": {
+    "incidents": {
+      "url": "https://www.firescotland.gov.uk/publications/document/?id=9990",
+      "published": "2026-10-30",
+      "sha256": "a9fa5a8e017ad4dce29dd57d2abbce520ca4af31aa415036487991bcfe88ba5d"
+    },
+    "tables": {
+      "url": "https://www.firescotland.gov.uk/publications/document/?id=9989",
+      "published": "2026-10-30",
+      "sha256": "5c3bbd46c941a4095275cd887d05874bbb9ac9834dab39c82eb3c53e0a64c0b4"
+    },
+    "lookup": {
+      "url": "https://data.gov.scot/dataset/2022_data_zone_lookup/resource/81b010f5-0207-4ee5-bd2d-e7821aa6a3dc",
+      "published": "2026-08-19",
+      "sha256": "41f51a4c0e6edbd30f81c3d8d79c37f3f557a3c1d887a10b75c07f0bc01e0891"
+    },
+    "glasgow_map": {
+      "url": "https://www.data.gov.uk/dataset/faf874fd-aee8-4ca0-a4a9-4c8885ba3e82/wards-may-2024-boundaries-uk-bgc",
+      "edition": "WD24",
+      "sha256": "86fa0fc0112b1335cff186e06fc006249438ea37a31618894e9ac9f2b06c01cd"
+    },
+    "direct_benchmark": {
+      "url": "https://data.gov.scot/dataset/fire___type_of_incident",
+      "sha256": "7bf600b93ff765de52f141e376e65f95af7f830c2ba97b389847e55104eb211c"
+    }
+  },
+  "coverage": {
+    "ward_years": 6035,
+    "glasgow_ward_years": 391,
+    "mapped_incidents": 88241,
+    "glasgow_mapped_incidents": 15458,
+    "verified_zero_ward_years": 90,
+    "unavailable_ward_years": 0,
+    "missing_council": 0,
+    "unknown_council": 0,
+    "missing_datazone": 0,
+    "unmatched_datazone": 0,
+    "council_name_disagreement": 0,
+    "council_code_disagreement": 0,
+    "published_council_years_reconciled": 544,
+    "unnamed_published_rows_excluded": [
+      {
+        "financial_year": "2024/2025",
+        "dwelling_fires": 0
+      }
+    ]
+  },
+  "glasgow_annual_totals": {
+    "2009/2010": 1286,
+    "2010/2011": 1179,
+    "2011/2012": 1215,
+    "2012/2013": 1040,
+    "2013/2014": 915,
+    "2014/2015": 944,
+    "2015/2016": 960,
+    "2016/2017": 929,
+    "2017/2018": 962,
+    "2018/2019": 895,
+    "2019/2020": 903,
+    "2020/2021": 795,
+    "2021/2022": 794,
+    "2022/2023": 713,
+    "2023/2024": 689,
+    "2024/2025": 623,
+    "2025/2026": 616
+  },
+  "glasgow_direct_overlap": {
+    "source_id": "sfrs_direct_ward_fy2009_10_to_fy2022_23",
+    "matched_ward_years": 322,
+    "exact_matches": 99,
+    "mean_absolute_difference": 1.494,
+    "smallest_delta": -6,
+    "largest_delta": 9,
+    "direct_total": 13525,
+    "best_fit_total": 13530
+  },
+  "artifact": {
+    "name": "sfrs_best_fit_ward_dwelling_fires_fy2025_26.csv",
+    "rows": 6035,
+    "sha256": "9bd190e6305254500e680766dd830522b3d087fdc6bba1b4c25c269405ca0d00"
+  }
+}
