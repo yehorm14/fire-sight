@@ -27,7 +27,10 @@ WARDS_FILE = BASE_DIR / "data" / "glasgow_wards.geojson"
 FY_RE = re.compile(r"^(\d{4})/(\d{4})$")
 HORIZON_LEADS = (1, 2, 3)
 
-ZONE_COLUMNS = {"zoneid", "zonename", "simddecile", "riskscore", "drivers", "riskrank", "n_score_components"}
+ZONE_COLUMNS = {
+    "zoneid", "zonename", "simddecile", "riskscore", "drivers", "riskrank",
+    "n_score_components", "cif_ratio",
+}
 WARD_COLUMNS = {
     "ward_id", "ward_name", "history_annual", "years_of_data", "first_year", "last_year",
     "first_financial_year", "last_financial_year",
@@ -38,7 +41,16 @@ WARD_COLUMNS = {
 }
 
 MANIFEST_SOURCES = [
-    {"name": "SIMD 2020v2 indicators", "publisher": "Scottish Government"},
+    {
+        "name": "SIMD 2020v2 population-weighted deciles",
+        "publisher": "Public Health Scotland",
+        "url": "https://www.opendata.nhs.scot/dataset/scottish-index-of-multiple-deprivation/resource/acade396-8430-4b34-895a-b3e757fa346e",
+    },
+    {
+        "name": "SIMD 2020v2 indicators",
+        "publisher": "Scottish Government",
+        "url": "https://www.gov.scot/publications/scottish-index-of-multiple-deprivation-2020v2-indicator-data/",
+    },
     {"name": "SFRS fire statistics (type of incident)", "publisher": "Scottish Fire and Rescue Service via data.gov.scot"},
 ]
 
@@ -163,6 +175,12 @@ def build_manifest() -> Dict[str, Any]:
             {fy for lead in HORIZON_LEADS for fy in wf[f"financial_year_{lead}yr"]}
         ),
         "sources": MANIFEST_SOURCES,
+        "zone_model": {
+            "version": 2,
+            "score_type": "heuristic vulnerability composite",
+            "cif_column": "cif_ratio",
+            "cif_unit": "indirectly standardised observed-to-expected ratio on the published scale",
+        },
         "files": {
             p.name: {"sha256": sha256_of(p), "rows": int(len(df))}
             for p, df in ((WARD_FORECASTS_CSV, wf), (ZONES_CSV, zones))

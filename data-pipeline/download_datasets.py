@@ -7,11 +7,11 @@ Fetches the raw inputs that run_model.py needs into data-pipeline/raw/
     python data-pipeline/download_datasets.py
 
 Files written:
+    raw/simd2020.csv                  SIMD 2020v2 population-weighted deciles (Public Health Scotland)
     raw/simd2020_indicators.xlsx      SIMD 2020v2 indicator data (Scottish Government)
     raw/fire_statistics_scotland.csv  Fires by type of incident, per ward (data.gov.scot)
 
-Manual step: raw/simd2020.csv (SIMD 2020v2 ranks and deciles per data zone).
-See the message printed at the end.
+Use --zones-only to download only the SIMD inputs.
 
 Optional: pass --boundaries to also download the 2011 data zone boundaries as
 GeoJSON (needs geopandas). run_model.py does not use them.
@@ -29,6 +29,10 @@ import requests
 RAW = Path(__file__).resolve().parent / "raw"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Fire Sight data pipeline)"}
 
+SIMD_DECILES_URL = (
+    "https://www.opendata.nhs.scot/dataset/78d41fa9-1a62-4f7b-9edb-3e8522a93378/"
+    "resource/acade396-8430-4b34-895a-b3e757fa346e/download/simd2020v2_22062020.csv"
+)
 SIMD_INDICATORS_URL = (
     "https://www.gov.scot/binaries/content/documents/govscot/publications/"
     "statistics/2020/01/scottish-index-of-multiple-deprivation-2020-indicator-data/"
@@ -40,7 +44,6 @@ FIRE_STATS_URL = (
     "f6b74111-b687-45dc-885d-66857bef37ba/download?format=csv"
 )
 DATAZONE_BOUNDARIES_URL = "https://maps.gov.scot/ATOM/shapefiles/SG_DataZoneBdry_2011.zip"
-SIMD_PAGE = "https://www.gov.scot/collections/scottish-index-of-multiple-deprivation-2020/"
 
 
 def download(url: str, dest: Path, label: str) -> bool:
@@ -92,32 +95,26 @@ def download_boundaries() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--zones-only", action="store_true",
+                        help="skip the ward fire statistics download")
     parser.add_argument("--boundaries", action="store_true",
                         help="also download data zone boundaries (needs geopandas)")
     args = parser.parse_args()
 
     RAW.mkdir(exist_ok=True)
 
-    print("\n[1] SIMD 2020v2 indicators (Scottish Government)")
+    print("\nSIMD 2020v2 ...")
     required_ok = [
-        download(SIMD_INDICATORS_URL, RAW / "simd2020_indicators.xlsx", "SIMD 2020v2 indicators")
+        download(SIMD_DECILES_URL, RAW / "simd2020.csv", "SIMD 2020v2 population-weighted deciles"),
+        download(SIMD_INDICATORS_URL, RAW / "simd2020_indicators.xlsx", "SIMD 2020v2 indicators"),
     ]
 
-    print("\n[2] Fire statistics by type of incident (statistics.gov.scot)")
-    required_ok.append(download(FIRE_STATS_URL, RAW / "fire_statistics_scotland.csv", "fire statistics"))
+    if not args.zones_only:
+        print("\nFire statistics by type of incident ...")
+        required_ok.append(download(FIRE_STATS_URL, RAW / "fire_statistics_scotland.csv", "fire statistics"))
 
     if args.boundaries:
-        print("\n[3] Data zone 2011 boundaries")
         download_boundaries()
-
-    print("\n[manual] raw/simd2020.csv")
-    if (RAW / "simd2020.csv").exists():
-        print("  [skip] simd2020.csv already exists")
-    else:
-        print("  Download the SIMD 2020v2 ranks file (CSV with columns DataZone, IntZone, CA,")
-        print("  SIMD2020V2CountryDecile, ...) from:")
-        print(f"  {SIMD_PAGE}")
-        print(f"  and save it as {RAW / 'simd2020.csv'}")
 
     print("\nFiles in raw/:")
     for f in sorted(RAW.iterdir()):
