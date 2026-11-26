@@ -12,21 +12,33 @@
   ],
   "sources": [
     {
+      "name": "SIMD 2020v2 population-weighted deciles",
+      "publisher": "Public Health Scotland",
+      "url": "https://www.opendata.nhs.scot/dataset/scottish-index-of-multiple-deprivation/resource/acade396-8430-4b34-895a-b3e757fa346e"
+    },
+    {
       "name": "SIMD 2020v2 indicators",
-      "publisher": "Scottish Government"
+      "publisher": "Scottish Government",
+      "url": "https://www.gov.scot/publications/scottish-index-of-multiple-deprivation-2020v2-indicator-data/"
     },
     {
       "name": "SFRS fire statistics (type of incident)",
       "publisher": "Scottish Fire and Rescue Service via data.gov.scot"
     }
   ],
+  "zone_model": {
+    "version": 2,
+    "score_type": "heuristic vulnerability composite",
+    "cif_column": "cif_ratio",
+    "cif_unit": "indirectly standardised observed-to-expected ratio on the published scale"
+  },
   "files": {
     "glasgow_ward_forecasts.csv": {
       "sha256": "615c49b4eb38b77a64e8d13857946a43a7856ae110706fa03b6d0ad809f84921",
       "rows": 23
     },
     "glasgowzones.csv": {
-      "sha256": "866c93dd9da5325e19aa44c9dfbce7a76401bfc528bc273d8c732e9d181c28b8",
+      "sha256": "fa16694f1faef6c16e4d85192cee5531c01f4a0d7d1a4d827e5e3ac524059f44",
       "rows": 746
     }
   }
