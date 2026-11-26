@@ -1,0 +1,1298 @@
+{
+  "source_id": "sfrs_best_fit_ward_dwelling_fires_fy2025_26",
+  "observation_sha256": "9bd190e6305254500e680766dd830522b3d087fdc6bba1b4c25c269405ca0d00",
+  "first_scored_origin": "2018/2019",
+  "fixed_holdout_origin": "2022/2023",
+  "nominal_interval_coverage": 0.8,
+  "minimum_prior_target_years_for_calibration": 4,
+  "promotion_thresholds": {
+    "minimum_equal_lead_mae_improvement_fraction": 0.05,
+    "maximum_lead_mae_regression_fraction": 0.05,
+    "maximum_fixed_holdout_city_absolute_bias_fraction": 0.1,
+    "minimum_covered_target_years": 5,
+    "maximum_coverage_error": 0.1
+  },
+  "full": {
+    "1": {
+      "target_period": [
+        "2019/2020",
+        "2025/2026"
+      ],
+      "origin_period": [
+        "2018/2019",
+        "2024/2025"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 161,
+            "target_years": 7,
+            "mae": 6.5404,
+            "bias": 0.5901,
+            "mean_observed": 31.882,
+            "intervals": {
+              "available_cases": 138,
+              "target_years": 6,
+              "covered_cases": 125,
+              "coverage": 0.9058,
+              "mean_width": 24.942
+            }
+          },
+          "city": {
+            "cases": 7,
+            "target_years": 7,
+            "mae": 30.4286,
+            "bias": 13.5714,
+            "mean_observed": 733.2857,
+            "intervals": {
+              "available_cases": 6,
+              "target_years": 6,
+              "covered_cases": 6,
+              "coverage": 1.0,
+              "mean_width": 239.3333
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 161,
+            "target_years": 7,
+            "mae": 7.0621,
+            "bias": 1.7329,
+            "mean_observed": 31.882,
+            "intervals": {
+              "available_cases": 138,
+              "target_years": 6,
+              "covered_cases": 112,
+              "coverage": 0.8116,
+              "mean_width": 24.3188
+            }
+          },
+          "city": {
+            "cases": 7,
+            "target_years": 7,
+            "mae": 42.1429,
+            "bias": 39.8571,
+            "mean_observed": 733.2857,
+            "intervals": {
+              "available_cases": 6,
+              "target_years": 6,
+              "covered_cases": 5,
+              "coverage": 0.8333,
+              "mean_width": 179.6667
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 161,
+            "target_years": 7,
+            "mae": 6.7267,
+            "bias": 3.6335,
+            "mean_observed": 31.882,
+            "intervals": {
+              "available_cases": 138,
+              "target_years": 6,
+              "covered_cases": 113,
+              "coverage": 0.8188,
+              "mean_width": 21.0145
+            }
+          },
+          "city": {
+            "cases": 7,
+            "target_years": 7,
+            "mae": 83.5714,
+            "bias": 83.5714,
+            "mean_observed": 733.2857,
+            "intervals": {
+              "available_cases": 6,
+              "target_years": 6,
+              "covered_cases": 4,
+              "coverage": 0.6667,
+              "mean_width": 201.3333
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 161,
+            "target_years": 7,
+            "mae": 5.7329,
+            "bias": 0.6646,
+            "mean_observed": 31.882,
+            "intervals": {
+              "available_cases": 138,
+              "target_years": 6,
+              "covered_cases": 134,
+              "coverage": 0.971,
+              "mean_width": 25.1014
+            }
+          },
+          "city": {
+            "cases": 7,
+            "target_years": 7,
+            "mae": 39.8571,
+            "bias": 15.2857,
+            "mean_observed": 733.2857,
+            "intervals": {
+              "available_cases": 6,
+              "target_years": 6,
+              "covered_cases": 6,
+              "coverage": 1.0,
+              "mean_width": 248.0
+            }
+          }
+        }
+      }
+    },
+    "2": {
+      "target_period": [
+        "2020/2021",
+        "2025/2026"
+      ],
+      "origin_period": [
+        "2018/2019",
+        "2023/2024"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 138,
+            "target_years": 6,
+            "mae": 7.4058,
+            "bias": 1.4493,
+            "mean_observed": 30.6522,
+            "intervals": {
+              "available_cases": 92,
+              "target_years": 4,
+              "covered_cases": 86,
+              "coverage": 0.9348,
+              "mean_width": 32.837
+            }
+          },
+          "city": {
+            "cases": 6,
+            "target_years": 6,
+            "mae": 33.3333,
+            "bias": 33.3333,
+            "mean_observed": 705.0,
+            "intervals": {
+              "available_cases": 4,
+              "target_years": 4,
+              "covered_cases": 4,
+              "coverage": 1.0,
+              "mean_width": 330.0
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 138,
+            "target_years": 6,
+            "mae": 7.7899,
+            "bias": 4.0507,
+            "mean_observed": 30.6522,
+            "intervals": {
+              "available_cases": 92,
+              "target_years": 4,
+              "covered_cases": 81,
+              "coverage": 0.8804,
+              "mean_width": 25.9674
+            }
+          },
+          "city": {
+            "cases": 6,
+            "target_years": 6,
+            "mae": 93.1667,
+            "bias": 93.1667,
+            "mean_observed": 705.0,
+            "intervals": {
+              "available_cases": 4,
+              "target_years": 4,
+              "covered_cases": 2,
+              "coverage": 0.5,
+              "mean_width": 188.5
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 138,
+            "target_years": 6,
+            "mae": 7.6522,
+            "bias": 5.8986,
+            "mean_observed": 30.6522,
+            "intervals": {
+              "available_cases": 92,
+              "target_years": 4,
+              "covered_cases": 80,
+              "coverage": 0.8696,
+              "mean_width": 24.087
+            }
+          },
+          "city": {
+            "cases": 6,
+            "target_years": 6,
+            "mae": 135.6667,
+            "bias": 135.6667,
+            "mean_observed": 705.0,
+            "intervals": {
+              "available_cases": 4,
+              "target_years": 4,
+              "covered_cases": 1,
+              "coverage": 0.25,
+              "mean_width": 234.0
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 138,
+            "target_years": 6,
+            "mae": 5.6087,
+            "bias": 1.4348,
+            "mean_observed": 30.6522,
+            "intervals": {
+              "available_cases": 92,
+              "target_years": 4,
+              "covered_cases": 90,
+              "coverage": 0.9783,
+              "mean_width": 28.1087
+            }
+          },
+          "city": {
+            "cases": 6,
+            "target_years": 6,
+            "mae": 34.3333,
+            "bias": 33.0,
+            "mean_observed": 705.0,
+            "intervals": {
+              "available_cases": 4,
+              "target_years": 4,
+              "covered_cases": 4,
+              "coverage": 1.0,
+              "mean_width": 324.0
+            }
+          }
+        }
+      }
+    },
+    "3": {
+      "target_period": [
+        "2021/2022",
+        "2025/2026"
+      ],
+      "origin_period": [
+        "2018/2019",
+        "2022/2023"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 115,
+            "target_years": 5,
+            "mae": 8.7304,
+            "bias": 1.8261,
+            "mean_observed": 29.8696,
+            "intervals": {
+              "available_cases": 46,
+              "target_years": 2,
+              "covered_cases": 46,
+              "coverage": 1.0,
+              "mean_width": 41.0652
+            }
+          },
+          "city": {
+            "cases": 5,
+            "target_years": 5,
+            "mae": 43.2,
+            "bias": 42.0,
+            "mean_observed": 687.0,
+            "intervals": {
+              "available_cases": 2,
+              "target_years": 2,
+              "covered_cases": 2,
+              "coverage": 1.0,
+              "mean_width": 540.0
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 115,
+            "target_years": 5,
+            "mae": 9.0696,
+            "bias": 5.7826,
+            "mean_observed": 29.8696,
+            "intervals": {
+              "available_cases": 46,
+              "target_years": 2,
+              "covered_cases": 40,
+              "coverage": 0.8696,
+              "mean_width": 28.0652
+            }
+          },
+          "city": {
+            "cases": 5,
+            "target_years": 5,
+            "mae": 133.0,
+            "bias": 133.0,
+            "mean_observed": 687.0,
+            "intervals": {
+              "available_cases": 2,
+              "target_years": 2,
+              "covered_cases": 1,
+              "coverage": 0.5,
+              "mean_width": 334.0
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 115,
+            "target_years": 5,
+            "mae": 9.0957,
+            "bias": 7.6174,
+            "mean_observed": 29.8696,
+            "intervals": {
+              "available_cases": 46,
+              "target_years": 2,
+              "covered_cases": 38,
+              "coverage": 0.8261,
+              "mean_width": 25.6087
+            }
+          },
+          "city": {
+            "cases": 5,
+            "target_years": 5,
+            "mae": 175.2,
+            "bias": 175.2,
+            "mean_observed": 687.0,
+            "intervals": {
+              "available_cases": 2,
+              "target_years": 2,
+              "covered_cases": 1,
+              "coverage": 0.5,
+              "mean_width": 310.0
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 115,
+            "target_years": 5,
+            "mae": 5.7043,
+            "bias": 1.7043,
+            "mean_observed": 29.8696,
+            "intervals": {
+              "available_cases": 46,
+              "target_years": 2,
+              "covered_cases": 46,
+              "coverage": 1.0,
+              "mean_width": 29.1304
+            }
+          },
+          "city": {
+            "cases": 5,
+            "target_years": 5,
+            "mae": 51.6,
+            "bias": 39.2,
+            "mean_observed": 687.0,
+            "intervals": {
+              "available_cases": 2,
+              "target_years": 2,
+              "covered_cases": 2,
+              "coverage": 1.0,
+              "mean_width": 442.0
+            }
+          }
+        }
+      }
+    }
+  },
+  "pre_holdout": {
+    "1": {
+      "target_period": [
+        "2019/2020",
+        "2022/2023"
+      ],
+      "origin_period": [
+        "2018/2019",
+        "2021/2022"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 92,
+            "target_years": 4,
+            "mae": 7.1957,
+            "bias": 0.4348,
+            "mean_observed": 34.837,
+            "intervals": {
+              "available_cases": 69,
+              "target_years": 3,
+              "covered_cases": 63,
+              "coverage": 0.913,
+              "mean_width": 26.1739
+            }
+          },
+          "city": {
+            "cases": 4,
+            "target_years": 4,
+            "mae": 38.5,
+            "bias": 10.0,
+            "mean_observed": 801.25,
+            "intervals": {
+              "available_cases": 3,
+              "target_years": 3,
+              "covered_cases": 3,
+              "coverage": 1.0,
+              "mean_width": 244.0
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 92,
+            "target_years": 4,
+            "mae": 7.7609,
+            "bias": 1.9783,
+            "mean_observed": 34.837,
+            "intervals": {
+              "available_cases": 69,
+              "target_years": 3,
+              "covered_cases": 54,
+              "coverage": 0.7826,
+              "mean_width": 25.0725
+            }
+          },
+          "city": {
+            "cases": 4,
+            "target_years": 4,
+            "mae": 49.5,
+            "bias": 45.5,
+            "mean_observed": 801.25,
+            "intervals": {
+              "available_cases": 3,
+              "target_years": 3,
+              "covered_cases": 2,
+              "coverage": 0.6667,
+              "mean_width": 161.3333
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 92,
+            "target_years": 4,
+            "mae": 7.2391,
+            "bias": 3.6739,
+            "mean_observed": 34.837,
+            "intervals": {
+              "available_cases": 69,
+              "target_years": 3,
+              "covered_cases": 55,
+              "coverage": 0.7971,
+              "mean_width": 21.4783
+            }
+          },
+          "city": {
+            "cases": 4,
+            "target_years": 4,
+            "mae": 84.5,
+            "bias": 84.5,
+            "mean_observed": 801.25,
+            "intervals": {
+              "available_cases": 3,
+              "target_years": 3,
+              "covered_cases": 1,
+              "coverage": 0.3333,
+              "mean_width": 157.3333
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 92,
+            "target_years": 4,
+            "mae": 6.3913,
+            "bias": -0.1957,
+            "mean_observed": 34.837,
+            "intervals": {
+              "available_cases": 69,
+              "target_years": 3,
+              "covered_cases": 67,
+              "coverage": 0.971,
+              "mean_width": 27.2464
+            }
+          },
+          "city": {
+            "cases": 4,
+            "target_years": 4,
+            "mae": 38.5,
+            "bias": -4.5,
+            "mean_observed": 801.25,
+            "intervals": {
+              "available_cases": 3,
+              "target_years": 3,
+              "covered_cases": 3,
+              "coverage": 1.0,
+              "mean_width": 254.0
+            }
+          }
+        }
+      }
+    },
+    "2": {
+      "target_period": [
+        "2020/2021",
+        "2022/2023"
+      ],
+      "origin_period": [
+        "2018/2019",
+        "2020/2021"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 69,
+            "target_years": 3,
+            "mae": 8.058,
+            "bias": 1.3913,
+            "mean_observed": 33.3623,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 22,
+              "coverage": 0.9565,
+              "mean_width": 36.5217
+            }
+          },
+          "city": {
+            "cases": 3,
+            "target_years": 3,
+            "mae": 32.0,
+            "bias": 32.0,
+            "mean_observed": 767.3333,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 330.0
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 69,
+            "target_years": 3,
+            "mae": 8.3623,
+            "bias": 4.2174,
+            "mean_observed": 33.3623,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 21,
+              "coverage": 0.913,
+              "mean_width": 26.2609
+            }
+          },
+          "city": {
+            "cases": 3,
+            "target_years": 3,
+            "mae": 97.0,
+            "bias": 97.0,
+            "mean_observed": 767.3333,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 0,
+              "coverage": 0.0,
+              "mean_width": 118.0
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 69,
+            "target_years": 3,
+            "mae": 8.029,
+            "bias": 5.971,
+            "mean_observed": 33.3623,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 21,
+              "coverage": 0.913,
+              "mean_width": 24.6087
+            }
+          },
+          "city": {
+            "cases": 3,
+            "target_years": 3,
+            "mae": 137.3333,
+            "bias": 137.3333,
+            "mean_observed": 767.3333,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 0,
+              "coverage": 0.0,
+              "mean_width": 98.0
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 69,
+            "target_years": 3,
+            "mae": 6.058,
+            "bias": 0.5797,
+            "mean_observed": 33.3623,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 23,
+              "coverage": 1.0,
+              "mean_width": 33.2174
+            }
+          },
+          "city": {
+            "cases": 3,
+            "target_years": 3,
+            "mae": 16.0,
+            "bias": 13.3333,
+            "mean_observed": 767.3333,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 324.0
+            }
+          }
+        }
+      }
+    },
+    "3": {
+      "target_period": [
+        "2021/2022",
+        "2022/2023"
+      ],
+      "origin_period": [
+        "2018/2019",
+        "2019/2020"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 46,
+            "target_years": 2,
+            "mae": 9.8478,
+            "bias": 1.6304,
+            "mean_observed": 32.7609,
+            "intervals": {
+              "available_cases": 0,
+              "target_years": 0,
+              "covered_cases": 0,
+              "coverage": null,
+              "mean_width": null
+            }
+          },
+          "city": {
+            "cases": 2,
+            "target_years": 2,
+            "mae": 40.5,
+            "bias": 37.5,
+            "mean_observed": 753.5,
+            "intervals": {
+              "available_cases": 0,
+              "target_years": 0,
+              "covered_cases": 0,
+              "coverage": null,
+              "mean_width": null
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 46,
+            "target_years": 2,
+            "mae": 9.9348,
+            "bias": 6.3261,
+            "mean_observed": 32.7609,
+            "intervals": {
+              "available_cases": 0,
+              "target_years": 0,
+              "covered_cases": 0,
+              "coverage": null,
+              "mean_width": null
+            }
+          },
+          "city": {
+            "cases": 2,
+            "target_years": 2,
+            "mae": 145.5,
+            "bias": 145.5,
+            "mean_observed": 753.5,
+            "intervals": {
+              "available_cases": 0,
+              "target_years": 0,
+              "covered_cases": 0,
+              "coverage": null,
+              "mean_width": null
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 46,
+            "target_years": 2,
+            "mae": 9.3696,
+            "bias": 7.4565,
+            "mean_observed": 32.7609,
+            "intervals": {
+              "available_cases": 0,
+              "target_years": 0,
+              "covered_cases": 0,
+              "coverage": null,
+              "mean_width": null
+            }
+          },
+          "city": {
+            "cases": 2,
+            "target_years": 2,
+            "mae": 171.5,
+            "bias": 171.5,
+            "mean_observed": 753.5,
+            "intervals": {
+              "available_cases": 0,
+              "target_years": 0,
+              "covered_cases": 0,
+              "coverage": null,
+              "mean_width": null
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 46,
+            "target_years": 2,
+            "mae": 6.2391,
+            "bias": 0.413,
+            "mean_observed": 32.7609,
+            "intervals": {
+              "available_cases": 0,
+              "target_years": 0,
+              "covered_cases": 0,
+              "coverage": null,
+              "mean_width": null
+            }
+          },
+          "city": {
+            "cases": 2,
+            "target_years": 2,
+            "mae": 40.5,
+            "bias": 9.5,
+            "mean_observed": 753.5,
+            "intervals": {
+              "available_cases": 0,
+              "target_years": 0,
+              "covered_cases": 0,
+              "coverage": null,
+              "mean_width": null
+            }
+          }
+        }
+      }
+    }
+  },
+  "fixed_holdout": {
+    "1": {
+      "target_period": [
+        "2023/2024",
+        "2023/2024"
+      ],
+      "origin_period": [
+        "2022/2023",
+        "2022/2023"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 6.1739,
+            "bias": 0.6957,
+            "mean_observed": 29.9565,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 22,
+              "coverage": 0.9565,
+              "mean_width": 25.2174
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 16.0,
+            "bias": 16.0,
+            "mean_observed": 689.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 244.0
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 7.4783,
+            "bias": 1.0435,
+            "mean_observed": 29.9565,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 17,
+              "coverage": 0.7391,
+              "mean_width": 23.4783
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 24.0,
+            "bias": 24.0,
+            "mean_observed": 689.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 216.0
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 7.0,
+            "bias": 3.4348,
+            "mean_observed": 29.9565,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 19,
+              "coverage": 0.8261,
+              "mean_width": 20.9565
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 79.0,
+            "bias": 79.0,
+            "mean_observed": 689.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 252.0
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 6.087,
+            "bias": 1.3043,
+            "mean_observed": 29.9565,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 22,
+              "coverage": 0.9565,
+              "mean_width": 24.0
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 30.0,
+            "bias": 30.0,
+            "mean_observed": 689.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 254.0
+            }
+          }
+        }
+      }
+    },
+    "2": {
+      "target_period": [
+        "2024/2025",
+        "2024/2025"
+      ],
+      "origin_period": [
+        "2022/2023",
+        "2022/2023"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 6.7826,
+            "bias": 2.1739,
+            "mean_observed": 27.087,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 22,
+              "coverage": 0.9565,
+              "mean_width": 31.6522
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 50.0,
+            "bias": 50.0,
+            "mean_observed": 623.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 330.0
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 6.6957,
+            "bias": 3.913,
+            "mean_observed": 27.087,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 22,
+              "coverage": 0.9565,
+              "mean_width": 27.087
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 90.0,
+            "bias": 90.0,
+            "mean_observed": 623.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 218.0
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 7.2609,
+            "bias": 6.3043,
+            "mean_observed": 27.087,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 20,
+              "coverage": 0.8696,
+              "mean_width": 24.2609
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 145.0,
+            "bias": 145.0,
+            "mean_observed": 623.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 0,
+              "coverage": 0.0,
+              "mean_width": 268.0
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 4.7826,
+            "bias": 3.0435,
+            "mean_observed": 27.087,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 23,
+              "coverage": 1.0,
+              "mean_width": 26.8696
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 70.0,
+            "bias": 70.0,
+            "mean_observed": 623.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 324.0
+            }
+          }
+        }
+      }
+    },
+    "3": {
+      "target_period": [
+        "2025/2026",
+        "2025/2026"
+      ],
+      "origin_period": [
+        "2022/2023",
+        "2022/2023"
+      ],
+      "models": {
+        "weighted_trend": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 7.7826,
+            "bias": 1.0,
+            "mean_observed": 26.7826,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 23,
+              "coverage": 1.0,
+              "mean_width": 39.5652
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 23.0,
+            "bias": 23.0,
+            "mean_observed": 616.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 540.0
+            }
+          }
+        },
+        "last_value": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 7.9565,
+            "bias": 4.2174,
+            "mean_observed": 26.7826,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 21,
+              "coverage": 0.913,
+              "mean_width": 26.7391
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 97.0,
+            "bias": 97.0,
+            "mean_observed": 616.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 334.0
+            }
+          }
+        },
+        "moving_average_3yr": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 7.6522,
+            "bias": 6.6087,
+            "mean_observed": 26.7826,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 19,
+              "coverage": 0.8261,
+              "mean_width": 25.2174
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 152.0,
+            "bias": 152.0,
+            "mean_observed": 616.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 310.0
+            }
+          }
+        },
+        "pooled_poisson": {
+          "ward": {
+            "cases": 23,
+            "target_years": 1,
+            "mae": 4.3478,
+            "bias": 2.3478,
+            "mean_observed": 26.7826,
+            "intervals": {
+              "available_cases": 23,
+              "target_years": 1,
+              "covered_cases": 23,
+              "coverage": 1.0,
+              "mean_width": 27.2174
+            }
+          },
+          "city": {
+            "cases": 1,
+            "target_years": 1,
+            "mae": 54.0,
+            "bias": 54.0,
+            "mean_observed": 616.0,
+            "intervals": {
+              "available_cases": 1,
+              "target_years": 1,
+              "covered_cases": 1,
+              "coverage": 1.0,
+              "mean_width": 442.0
+            }
+          }
+        }
+      }
+    }
+  },
+  "incumbent_residual_range_diagnostics": {
+    "1": {
+      "available_cases": 161,
+      "target_years": 7,
+      "covered_cases": 152,
+      "coverage": 0.9441,
+      "mean_width": 31.9379
+    },
+    "2": {
+      "available_cases": 138,
+      "target_years": 6,
+      "covered_cases": 121,
+      "coverage": 0.8768,
+      "mean_width": 32.0507
+    },
+    "3": {
+      "available_cases": 115,
+      "target_years": 5,
+      "covered_cases": 90,
+      "coverage": 0.7826,
+      "mean_width": 32.1739
+    }
+  },
+  "fixed_holdout_city_intervals": [
+    {
+      "target": "2023/2024",
+      "observed": 689.0,
+      "forecast": 719,
+      "lower": 592,
+      "upper": 846,
+      "calibration_years": 7,
+      "last_calibration_target": "2021/2022"
+    },
+    {
+      "target": "2024/2025",
+      "observed": 623.0,
+      "forecast": 693,
+      "lower": 531,
+      "upper": 855,
+      "calibration_years": 6,
+      "last_calibration_target": "2021/2022"
+    },
+    {
+      "target": "2025/2026",
+      "observed": 616.0,
+      "forecast": 670,
+      "lower": 449,
+      "upper": 891,
+      "calibration_years": 5,
+      "last_calibration_target": "2021/2022"
+    }
+  ],
+  "promotion_decision": {
+    "accuracy": {
+      "development": {
+        "mean_mae_improvement_fraction": 0.2555,
+        "no_lead_regression_over_limit": true,
+        "passed": true
+      },
+      "fixed_holdout": {
+        "mean_mae_improvement_fraction": 0.2662,
+        "no_lead_regression_over_limit": true,
+        "passed": true
+      }
+    },
+    "fixed_holdout_city_absolute_bias_fraction": {
+      "1": 0.0435,
+      "2": 0.1124,
+      "3": 0.0877
+    },
+    "city_bias_passed": false,
+    "interval_coverage": {
+      "1": {
+        "ward": "outside_coverage_tolerance",
+        "city": "outside_coverage_tolerance"
+      },
+      "2": {
+        "ward": "insufficient_target_years",
+        "city": "insufficient_target_years"
+      },
+      "3": {
+        "ward": "insufficient_target_years",
+        "city": "insufficient_target_years"
+      }
+    },
+    "intervals_passed": false,
+    "candidate_eligible_for_promotion": false,
+    "fallback": "weighted_trend"
+  }
+}
