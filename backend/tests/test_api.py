@@ -1,5 +1,7 @@
 """Smoke tests for the Fire Sight API, run against the committed data files."""
 
+import pytest
+
 GOVAN = "S13002971"
 NORTH_EAST = "S13003133"  # last ward in the model output; easy to miss in filters
 
@@ -368,3 +370,53 @@ def test_explain_reports_the_source_that_supplies_the_record(client):
     assert response.json()["data_source"] == "model"
     assert response.json()["source_version"]
     assert client.get("/api/explain", params={**zone_params, "source": "mock"}).status_code == 400
+
+
+def test_empty_forecast_row_is_unavailable(client, monkeypatch):
+    import main
+
+    monkeypatch.setitem(main.ward_forecasts, GOVAN, {"ward_id": GOVAN})
+    for url, extra in _all_source_urls():
+        response = client.get(url, params={**extra, "source": "model"})
+        assert response.status_code == 503, url
+        detail = response.json()["detail"]
+        assert detail["error"] == "model_unavailable"
+        assert GOVAN in detail["reasons"][0]
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("forecast_2yr", float("nan")),
+    ("forecast_2yr", "12"),
+    ("forecast_2yr", -1),
+    ("financial_year_2yr", "2099/2100"),
+    ("financial_year_2yr", None),
+])
+def test_only_usable_ward_projection_leads_can_be_requested(client, monkeypatch, field, value):
+    import main
+
+    monkeypatch.setitem(main.ward_forecasts[GOVAN], field, value)
+    params = {"mode": "ward", "id": GOVAN, "source": "model"}
+    assert client.get("/api/explain", params={**params, "lead": 0}).status_code == 200
+    assert client.get("/api/explain", params=params).status_code == 200
+    result = client.get("/api/explain", params={**params, "lead": 2})
+    assert result.status_code == 503
+    assert result.json()["detail"]["error"] == "model_unavailable"
+    for path, _ in _all_source_urls()[:-1]:
+        assert client.get(path, params={"source": "model"}).status_code == 503, path
+
+
+def test_ward_collections_require_geography_for_model_source(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "wards_geojson", {"type": "FeatureCollection", "features": []})
+    monkeypatch.setattr(main, "wards_by_id", {})
+    for path in ("/api/strategic/wards", "/api/strategic/wards.geojson"):
+        model = client.get(path, params={"source": "model"})
+        assert model.status_code == 503, path
+        assert model.json()["detail"]["error"] == "model_unavailable"
+        assert client.get(path, params={"source": "mock"}).status_code == 200, path
+
+    zone_id = client.get("/api/zones/top", params={"n": 1}).json()[0]["zoneid"]
+    zone = client.get("/api/explain", params={"mode": "zone", "id": zone_id, "source": "model"})
+    assert zone.status_code == 200
+    assert zone.json()["data_source"] == "model"

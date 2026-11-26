@@ -47,11 +47,15 @@ def sha256_of(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _fy_start(value: Any) -> Optional[int]:
+def financial_year_start(value: Any) -> Optional[int]:
     match = FY_RE.match(str(value))
     if not match or int(match.group(2)) != int(match.group(1)) + 1:
         return None
     return int(match.group(1))
+
+
+def is_nonnegative_count(value: Any) -> bool:
+    return type(value) in (int, float) and 0 <= value < float("inf")
 
 
 def _read_csv(path: Path, problems: List[str]):
@@ -102,7 +106,7 @@ def check_ward_forecasts(csv_path: Path = WARD_FORECASTS_CSV, wards_file: Path =
 
     for row in df.to_dict(orient="records"):
         ward = row["ward_id"]
-        first, last = _fy_start(row["first_financial_year"]), _fy_start(row["last_financial_year"])
+        first, last = financial_year_start(row["first_financial_year"]), financial_year_start(row["last_financial_year"])
         if first is None or last is None:
             problems.append(f"{ward}: first/last financial year must look like 2022/2023")
             continue
@@ -117,7 +121,7 @@ def check_ward_forecasts(csv_path: Path = WARD_FORECASTS_CSV, wards_file: Path =
         except (ValueError, SyntaxError):
             problems.append(f"{ward}: history_annual must be a list of non-negative annual counts")
         for lead in HORIZON_LEADS:
-            start = _fy_start(row[f"financial_year_{lead}yr"])
+            start = financial_year_start(row[f"financial_year_{lead}yr"])
             if start != last + lead:
                 problems.append(
                     f"{ward}: financial_year_{lead}yr is {row[f'financial_year_{lead}yr']!r}; "
@@ -126,7 +130,7 @@ def check_ward_forecasts(csv_path: Path = WARD_FORECASTS_CSV, wards_file: Path =
             lo, mid, hi = (
                 row[f"forecast_lower_{lead}yr"], row[f"forecast_{lead}yr"], row[f"forecast_upper_{lead}yr"],
             )
-            if any(v != v for v in (lo, mid, hi)) or not (0 <= lo <= mid <= hi):
+            if not all(is_nonnegative_count(value) for value in (lo, mid, hi)) or not (lo <= mid <= hi):
                 problems.append(f"{ward}: forecast bounds for lead {lead} must satisfy 0 <= lower <= forecast <= upper")
     return problems
 
