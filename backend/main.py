@@ -167,8 +167,8 @@ if ward_lookup is not None:
     )
     if ward_aggregates["unmatched_zones"] or ward_aggregates["wards_without_zones"]:
         logger.warning(
-            "DataZone-to-ward aggregation: %d unmatched zones, wards without zones: %s",
-            len(ward_aggregates["unmatched_zones"]),
+            "DataZone-to-ward aggregation: unmatched zone IDs: %s, wards without scored zones: %s",
+            ward_aggregates["unmatched_zones"],
             ward_aggregates["wards_without_zones"],
         )
 
@@ -203,7 +203,7 @@ def ward_model_provenance(props) -> Dict[str, Any]:
         "score_method": "simd_decile_proxy",
         "score_method_note": (
             "Proxy, not a geographic ward result: citywide mean model score of DataZones sharing the "
-            "ward's sample SIMD decile. Awaiting an official DataZone-to-ward lookup."
+            "ward's sample SIMD decile. No geographic score is available for this ward."
         ),
         "drivers": [],
         "zone_count": None,

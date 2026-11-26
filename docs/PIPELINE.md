@@ -39,11 +39,22 @@ When upstream inputs change:
 
 The regenerated CSV also includes bounds for years two and three, each projected financial year, and the first and last observed financial years. The API can read the previous CSV. It preserves the annual counts and first-step bounds and reports the later bounds as unavailable until the CSV is regenerated. See the [API migration notes](../backend/README.md#ward-projections).
 
+## Ward vulnerability lookup
+
+The committed [Glasgow lookup](../data-pipeline/reference/datazone_ward_lookup.csv) uses the Scottish Government's [SIMD 2020v2 Data Zone Lookup workbook](https://www.gov.scot/publications/scottish-index-of-multiple-deprivation-2020v2-data-zone-look-up/), updated January 2025. The workbook is available under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/). Contains public sector information licensed under the Open Government Licence v3.0.
+
+The generator pins the workbook SHA-256 (`0a64937af60fb339a1be85cd2f65b6a3d410a38dc5b6c7f25a72ba2d7060a03e`), extracts `DZ` and `MMWcode` for Glasgow City, and verifies exact coverage of all 746 modeled 2011 DataZones and the codes and names of all 23 [ONS May 2024 ward boundaries](https://www.data.gov.uk/dataset/faf874fd-aee8-4ca0-a4a9-4c8885ba3e82/wards-may-2024-boundaries-uk-bgc) used by the app.
+
+```bash
+python data-pipeline/build_ward_lookup.py '/path/to/SIMD 2020v2 - datazone lookup - updated 2025.xlsx'
+```
+
+Each DataZone is assigned to one ward by the published lookup. The ward vulnerability score is the population-weighted mean of its assigned DataZone scores, with an unweighted mean when the ward has no positive population weights. Drivers use population-weighted frequency of the assigned DataZones' model drivers. The API reports unmatched zones and wards without scored zones at startup.
+
 ## Limitations
 
 - The "Mock" source, the premises overlay and the event markers are illustrative sample data.
 - The model fits a recency-weighted linear trend to annual counts per ward. The residual range uses the point estimate ± 1.96 times the historical residual standard deviation, clipped at zero and rounded to whole counts. This describes historical fit error and has no calibrated coverage guarantee. The model has no weather, seasonality or planned-development inputs.
 - Risk weights are chosen by hand and not validated against incident outcomes.
-- In "Model" mode a ward's score is the population-weighted mean of the scores of its own DataZones, but only when an official DataZone-to-ward lookup is committed at `data-pipeline/reference/datazone_ward_lookup.csv` (columns `datazone_id`, `ward_id`, `datazone_vintage`, `ward_vintage`; one vintage each, matching `glasgow_wards.geojson`). Unmatched zones and wards without zones are logged at startup. No such lookup is committed yet, so the API currently returns `score_method: "simd_decile_proxy"` (the average DataZone score for the ward's sample SIMD decile) with an explanatory `score_method_note`; this is a proxy, not a geographic ward result.
-- In "Model" mode ward `drivers` come from the ward's own DataZone drivers (population-weighted frequency) and are empty while the proxy is in use. The sample population, planning and incident-history fields from the ward GeoJSON are not returned as model evidence.
+- If a ward has no scored DataZones available, the API may report a labelled SIMD-decile proxy. In model mode, sample population, planning and incident-history properties are excluded.
 - Census 2022 and EPC data were planned but are not used.
