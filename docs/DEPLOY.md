@@ -6,7 +6,8 @@
 | --- | --- | --- |
 | `VITE_BACKEND_URL` | frontend `.env.local` | API base URL, default `http://localhost:8000` |
 | `VITE_MAP_TILE_URL`, `VITE_MAP_TILE_ATTRIBUTION` | frontend, optional | Authorised public-browser tile URL template and required provider attribution. Set both to enable a basemap |
-| `VITE_EVENTS_API_URL` | frontend, optional | External events feed. Unset means built-in sample events |
+| `VITE_EVENTS_API_URL` | frontend, optional | External events feed. Leave unset to hide events |
+| `VITE_EVENTS_DEMO` | frontend, optional | Set to `true` to show labelled sample events in place of the external feed |
 | `CORS_ORIGINS` | backend | Comma-separated allowed origins, default `http://localhost:5173,http://127.0.0.1:5173` |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | backend, optional | Live explanations, model defaults to `gpt-4o-mini` |
 

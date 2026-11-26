@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const cfg = vi.hoisted(() => ({ EVENTS_API_URL: 'https://feed.test/events', EVENTS_DEMO_MODE: false }))
@@ -33,9 +33,10 @@ describe('EventLayer feed states', () => {
   it('keeps a successful empty feed empty (no invented events)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(ok([]))
     vi.stubGlobal('fetch', fetchMock)
-    render(<EventLayer timeFrame="In 1 year" />)
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-    await new Promise((r) => setTimeout(r, 10))
+    await act(async () => {
+      render(<EventLayer timeFrame="In 1 year" />)
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
     expect(screen.queryAllByTestId('marker')).toHaveLength(0)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
@@ -44,8 +45,9 @@ describe('EventLayer feed states', () => {
   it('keeps a feed whose events are all filtered out empty', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       ok({ events: [ev('old', dayOffset(-30)), ev('small', dayOffset(2), 10)] })))
-    render(<EventLayer timeFrame="Current" />)
-    await new Promise((r) => setTimeout(r, 10))
+    await act(async () => {
+      render(<EventLayer timeFrame="Current" />)
+    })
     expect(screen.queryAllByTestId('marker')).toHaveLength(0)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
@@ -76,13 +78,21 @@ describe('EventLayer feed states', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument()
   })
 
-  it('shows no events and no error when no feed is configured', async () => {
+  it('shows an error and retry for a malformed feed response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok({ events: {} })))
+    render(<EventLayer timeFrame="Current" />)
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.queryAllByTestId('marker')).toHaveLength(0)
+  })
+
+  it('shows no events and no error when no feed is configured', () => {
     cfg.EVENTS_API_URL = ''
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     render(<EventLayer timeFrame="In 1.5 years" />)
-    await new Promise((r) => setTimeout(r, 10))
     expect(screen.queryAllByTestId('marker')).toHaveLength(0)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

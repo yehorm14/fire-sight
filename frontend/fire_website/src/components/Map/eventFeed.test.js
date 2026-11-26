@@ -20,6 +20,18 @@ describe('isEventInWindow', () => {
     expect(isEventInWindow({ date: '2026-11-23T18:00:00' }, now, 1)).toBe(true)
   })
 
+  it('keeps the whole local day at a daylight-saving boundary', () => {
+    const event = { date: '2026-03-08' }
+    expect(isEventInWindow(event, at(2026, 3, 8, 23, 59), 1)).toBe(true)
+    expect(isEventInWindow(event, at(2026, 3, 9), 1)).toBe(false)
+  })
+
+  it('compares timed events by their absolute offsets', () => {
+    const now = new Date('2026-11-23T15:00:00Z')
+    expect(isEventInWindow({ date: '2026-11-23T15:30:00+01:00' }, now, 1)).toBe(false)
+    expect(isEventInWindow({ date: '2026-11-23T14:30:00-01:00' }, now, 1)).toBe(true)
+  })
+
   it('shows a multi-day event that started earlier but has not ended', () => {
     const now = at(2026, 11, 23, 12)
     expect(isEventInWindow({ date: '2026-11-21', endDate: '2026-11-24' }, now, 1)).toBe(true)
