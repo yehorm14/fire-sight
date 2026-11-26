@@ -6,11 +6,18 @@
 | --- | --- | --- |
 | `VITE_BACKEND_URL` | frontend `.env.local` | API base URL, default `http://localhost:8000` |
 | `VITE_MAP_TILE_URL`, `VITE_MAP_TILE_ATTRIBUTION` | frontend, optional | Authorised public-browser tile URL template and required provider attribution. Set both to enable a basemap |
-| `VITE_EVENTS_API_URL` | frontend, optional | External events feed. Unset means built-in sample events |
+| `VITE_EVENTS_API_URL` | frontend, optional | External events feed. Leave unset to hide events |
+| `VITE_EVENTS_DEMO` | frontend, optional | Set to `true` to show labelled sample events in place of the external feed |
 | `CORS_ORIGINS` | backend | Comma-separated allowed origins, default `http://localhost:5173,http://127.0.0.1:5173` |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | backend, optional | Live explanations, model defaults to `gpt-4o-mini` |
 
 Copy `backend/.env.example` to `backend/.env` and `frontend/fire_website/.env.example` to `.env.local`.
+
+## Event feed format
+
+The feed returns a JSON array or an object containing an `events` array. An invalid response shape shows an error with retry. Individual invalid entries are skipped so valid events in the same response still appear.
+
+Use `YYYY-MM-DD` for a whole calendar day in the viewer's local time or an ISO timestamp such as `2026-11-26T18:00:00Z` for a timed event. A timestamp without an offset uses the viewer's local time. An optional `endDate` gives a range. A date-only end includes the entire final calendar day.
 
 ## Backend on Render
 
