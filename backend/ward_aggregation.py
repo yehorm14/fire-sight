@@ -4,8 +4,8 @@ The lookup is a CSV with columns ``datazone_id``, ``ward_id``, ``datazone_vintag
 and ``ward_vintage`` (for example the National Records of Scotland / Scottish
 Government DataZone 2011 to electoral ward lookup, matching the ward vintage in
 ``glasgow_wards.geojson``). It is committed as
-``data-pipeline/reference/datazone_ward_lookup.csv`` once a validated copy is
-available; until then the API falls back to a clearly labelled proxy.
+``data-pipeline/reference/datazone_ward_lookup.csv`` using the source and validation
+procedure described in docs/PIPELINE.md.
 
 Aggregation rule (``AGGREGATION_RULE``): a ward's score is the population-weighted
 mean of the risk scores of the DataZones mapped to it. If no zone in a ward has a
@@ -83,6 +83,8 @@ def aggregate_wards(
         score = sum(w * float(z["riskscore"]) for w, z in zip(weights, members)) / total
         driver_weight: Counter = Counter()
         for w, z in zip(weights, members):
+            if not w:
+                continue
             for driver in z.get("drivers") or []:
                 driver_weight[driver] += w
         wards[ward] = {
