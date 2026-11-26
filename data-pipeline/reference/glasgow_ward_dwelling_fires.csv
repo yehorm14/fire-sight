@@ -1,0 +1,323 @@
+GeographyCode,GeographyName,GeographyType,DateCode,Measurement,Units,Value,Accident Status,Type Of Fire
+S13002967,Linn,Electoral Wards,2009/2010,Count,Fires,68,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2010/2011,Count,Fires,46,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2011/2012,Count,Fires,45,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2012/2013,Count,Fires,36,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2013/2014,Count,Fires,28,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2014/2015,Count,Fires,41,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2015/2016,Count,Fires,31,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2016/2017,Count,Fires,29,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2017/2018,Count,Fires,43,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2018/2019,Count,Fires,26,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2019/2020,Count,Fires,21,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2020/2021,Count,Fires,35,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2021/2022,Count,Fires,35,All,Dwelling Fire
+S13002967,Linn,Electoral Wards,2022/2023,Count,Fires,36,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2009/2010,Count,Fires,47,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2010/2011,Count,Fires,67,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2011/2012,Count,Fires,74,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2012/2013,Count,Fires,59,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2013/2014,Count,Fires,43,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2014/2015,Count,Fires,38,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2015/2016,Count,Fires,44,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2016/2017,Count,Fires,38,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2017/2018,Count,Fires,25,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2018/2019,Count,Fires,30,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2019/2020,Count,Fires,36,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2020/2021,Count,Fires,28,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2021/2022,Count,Fires,34,All,Dwelling Fire
+S13002968,Newlands/Auldburn,Electoral Wards,2022/2023,Count,Fires,25,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2009/2010,Count,Fires,35,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2010/2011,Count,Fires,33,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2011/2012,Count,Fires,40,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2012/2013,Count,Fires,29,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2013/2014,Count,Fires,31,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2014/2015,Count,Fires,39,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2015/2016,Count,Fires,49,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2016/2017,Count,Fires,42,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2017/2018,Count,Fires,29,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2018/2019,Count,Fires,39,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2019/2020,Count,Fires,34,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2020/2021,Count,Fires,22,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2021/2022,Count,Fires,23,All,Dwelling Fire
+S13002969,Greater Pollok,Electoral Wards,2022/2023,Count,Fires,32,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2009/2010,Count,Fires,72,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2010/2011,Count,Fires,56,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2011/2012,Count,Fires,56,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2012/2013,Count,Fires,43,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2013/2014,Count,Fires,47,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2014/2015,Count,Fires,42,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2015/2016,Count,Fires,52,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2016/2017,Count,Fires,44,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2017/2018,Count,Fires,28,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2018/2019,Count,Fires,32,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2019/2020,Count,Fires,37,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2020/2021,Count,Fires,42,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2021/2022,Count,Fires,34,All,Dwelling Fire
+S13002970,Cardonald,Electoral Wards,2022/2023,Count,Fires,39,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2009/2010,Count,Fires,75,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2010/2011,Count,Fires,77,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2011/2012,Count,Fires,83,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2012/2013,Count,Fires,93,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2013/2014,Count,Fires,86,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2014/2015,Count,Fires,70,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2015/2016,Count,Fires,85,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2016/2017,Count,Fires,84,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2017/2018,Count,Fires,83,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2018/2019,Count,Fires,53,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2019/2020,Count,Fires,46,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2020/2021,Count,Fires,60,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2021/2022,Count,Fires,46,All,Dwelling Fire
+S13002971,Govan,Electoral Wards,2022/2023,Count,Fires,51,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2009/2010,Count,Fires,40,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2010/2011,Count,Fires,37,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2011/2012,Count,Fires,37,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2012/2013,Count,Fires,43,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2013/2014,Count,Fires,32,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2014/2015,Count,Fires,25,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2015/2016,Count,Fires,23,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2016/2017,Count,Fires,31,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2017/2018,Count,Fires,37,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2018/2019,Count,Fires,16,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2019/2020,Count,Fires,21,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2020/2021,Count,Fires,28,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2021/2022,Count,Fires,22,All,Dwelling Fire
+S13002972,Pollokshields,Electoral Wards,2022/2023,Count,Fires,26,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2009/2010,Count,Fires,58,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2010/2011,Count,Fires,41,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2011/2012,Count,Fires,33,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2012/2013,Count,Fires,35,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2013/2014,Count,Fires,33,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2014/2015,Count,Fires,37,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2015/2016,Count,Fires,39,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2016/2017,Count,Fires,46,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2017/2018,Count,Fires,28,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2018/2019,Count,Fires,33,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2019/2020,Count,Fires,30,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2020/2021,Count,Fires,25,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2021/2022,Count,Fires,35,All,Dwelling Fire
+S13002973,Langside,Electoral Wards,2022/2023,Count,Fires,19,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2009/2010,Count,Fires,62,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2010/2011,Count,Fires,72,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2011/2012,Count,Fires,73,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2012/2013,Count,Fires,55,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2013/2014,Count,Fires,61,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2014/2015,Count,Fires,48,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2015/2016,Count,Fires,53,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2016/2017,Count,Fires,47,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2017/2018,Count,Fires,46,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2018/2019,Count,Fires,49,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2019/2020,Count,Fires,42,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2020/2021,Count,Fires,36,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2021/2022,Count,Fires,39,All,Dwelling Fire
+S13002974,Southside Central,Electoral Wards,2022/2023,Count,Fires,27,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2009/2010,Count,Fires,71,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2010/2011,Count,Fires,63,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2011/2012,Count,Fires,60,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2012/2013,Count,Fires,42,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2013/2014,Count,Fires,49,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2014/2015,Count,Fires,60,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2015/2016,Count,Fires,58,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2016/2017,Count,Fires,25,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2017/2018,Count,Fires,44,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2018/2019,Count,Fires,36,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2019/2020,Count,Fires,51,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2020/2021,Count,Fires,37,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2021/2022,Count,Fires,32,All,Dwelling Fire
+S13002975,Calton,Electoral Wards,2022/2023,Count,Fires,43,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2009/2010,Count,Fires,65,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2010/2011,Count,Fires,41,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2011/2012,Count,Fires,75,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2012/2013,Count,Fires,81,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2013/2014,Count,Fires,55,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2014/2015,Count,Fires,35,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2015/2016,Count,Fires,47,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2016/2017,Count,Fires,44,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2017/2018,Count,Fires,53,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2018/2019,Count,Fires,49,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2019/2020,Count,Fires,39,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2020/2021,Count,Fires,30,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2021/2022,Count,Fires,44,All,Dwelling Fire
+S13002976,Anderston/City/Yorkhill,Electoral Wards,2022/2023,Count,Fires,34,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2009/2010,Count,Fires,54,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2010/2011,Count,Fires,34,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2011/2012,Count,Fires,62,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2012/2013,Count,Fires,42,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2013/2014,Count,Fires,34,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2014/2015,Count,Fires,39,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2015/2016,Count,Fires,39,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2016/2017,Count,Fires,33,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2017/2018,Count,Fires,52,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2018/2019,Count,Fires,31,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2019/2020,Count,Fires,34,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2020/2021,Count,Fires,27,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2021/2022,Count,Fires,39,All,Dwelling Fire
+S13002977,Hillhead,Electoral Wards,2022/2023,Count,Fires,24,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2009/2010,Count,Fires,43,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2010/2011,Count,Fires,54,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2011/2012,Count,Fires,49,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2012/2013,Count,Fires,29,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2013/2014,Count,Fires,20,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2014/2015,Count,Fires,29,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2015/2016,Count,Fires,21,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2016/2017,Count,Fires,37,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2017/2018,Count,Fires,23,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2018/2019,Count,Fires,31,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2019/2020,Count,Fires,25,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2020/2021,Count,Fires,20,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2021/2022,Count,Fires,26,All,Dwelling Fire
+S13002978,Victoria Park,Electoral Wards,2022/2023,Count,Fires,21,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2009/2010,Count,Fires,79,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2010/2011,Count,Fires,83,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2011/2012,Count,Fires,85,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2012/2013,Count,Fires,58,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2013/2014,Count,Fires,49,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2014/2015,Count,Fires,51,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2015/2016,Count,Fires,48,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2016/2017,Count,Fires,41,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2017/2018,Count,Fires,55,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2018/2019,Count,Fires,52,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2019/2020,Count,Fires,58,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2020/2021,Count,Fires,41,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2021/2022,Count,Fires,61,All,Dwelling Fire
+S13002979,Garscadden/Scotstounhill,Electoral Wards,2022/2023,Count,Fires,35,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2009/2010,Count,Fires,66,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2010/2011,Count,Fires,57,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2011/2012,Count,Fires,60,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2012/2013,Count,Fires,60,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2013/2014,Count,Fires,40,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2014/2015,Count,Fires,58,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2015/2016,Count,Fires,41,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2016/2017,Count,Fires,49,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2017/2018,Count,Fires,56,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2018/2019,Count,Fires,63,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2019/2020,Count,Fires,60,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2020/2021,Count,Fires,56,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2021/2022,Count,Fires,38,All,Dwelling Fire
+S13002980,Drumchapel/Anniesland,Electoral Wards,2022/2023,Count,Fires,47,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2009/2010,Count,Fires,68,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2010/2011,Count,Fires,61,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2011/2012,Count,Fires,46,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2012/2013,Count,Fires,40,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2013/2014,Count,Fires,37,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2014/2015,Count,Fires,49,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2015/2016,Count,Fires,35,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2016/2017,Count,Fires,32,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2017/2018,Count,Fires,56,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2018/2019,Count,Fires,31,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2019/2020,Count,Fires,54,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2020/2021,Count,Fires,44,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2021/2022,Count,Fires,37,All,Dwelling Fire
+S13002981,Maryhill,Electoral Wards,2022/2023,Count,Fires,31,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2009/2010,Count,Fires,69,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2010/2011,Count,Fires,58,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2011/2012,Count,Fires,60,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2012/2013,Count,Fires,39,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2013/2014,Count,Fires,40,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2014/2015,Count,Fires,40,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2015/2016,Count,Fires,46,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2016/2017,Count,Fires,61,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2017/2018,Count,Fires,56,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2018/2019,Count,Fires,66,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2019/2020,Count,Fires,63,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2020/2021,Count,Fires,40,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2021/2022,Count,Fires,33,All,Dwelling Fire
+S13002982,Canal,Electoral Wards,2022/2023,Count,Fires,25,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2009/2010,Count,Fires,57,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2010/2011,Count,Fires,34,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2011/2012,Count,Fires,54,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2012/2013,Count,Fires,48,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2013/2014,Count,Fires,52,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2014/2015,Count,Fires,45,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2015/2016,Count,Fires,46,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2016/2017,Count,Fires,55,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2017/2018,Count,Fires,53,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2018/2019,Count,Fires,55,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2019/2020,Count,Fires,58,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2020/2021,Count,Fires,54,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2021/2022,Count,Fires,39,All,Dwelling Fire
+S13002983,Springburn/Robroyston,Electoral Wards,2022/2023,Count,Fires,42,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2009/2010,Count,Fires,50,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2010/2011,Count,Fires,42,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2011/2012,Count,Fires,37,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2012/2013,Count,Fires,34,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2013/2014,Count,Fires,37,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2014/2015,Count,Fires,36,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2015/2016,Count,Fires,34,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2016/2017,Count,Fires,34,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2017/2018,Count,Fires,37,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2018/2019,Count,Fires,44,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2019/2020,Count,Fires,36,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2020/2021,Count,Fires,37,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2021/2022,Count,Fires,55,All,Dwelling Fire
+S13002984,East Centre,Electoral Wards,2022/2023,Count,Fires,38,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2009/2010,Count,Fires,50,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2010/2011,Count,Fires,58,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2011/2012,Count,Fires,41,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2012/2013,Count,Fires,51,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2013/2014,Count,Fires,47,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2014/2015,Count,Fires,38,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2015/2016,Count,Fires,34,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2016/2017,Count,Fires,49,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2017/2018,Count,Fires,41,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2018/2019,Count,Fires,44,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2019/2020,Count,Fires,38,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2020/2021,Count,Fires,40,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2021/2022,Count,Fires,30,All,Dwelling Fire
+S13002985,Shettleston,Electoral Wards,2022/2023,Count,Fires,28,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2009/2010,Count,Fires,18,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2010/2011,Count,Fires,18,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2011/2012,Count,Fires,13,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2012/2013,Count,Fires,13,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2013/2014,Count,Fires,11,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2014/2015,Count,Fires,13,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2015/2016,Count,Fires,13,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2016/2017,Count,Fires,14,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2017/2018,Count,Fires,10,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2018/2019,Count,Fires,13,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2019/2020,Count,Fires,13,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2020/2021,Count,Fires,12,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2021/2022,Count,Fires,10,All,Dwelling Fire
+S13002986,Baillieston,Electoral Wards,2022/2023,Count,Fires,7,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2009/2010,Count,Fires,62,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2010/2011,Count,Fires,79,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2011/2012,Count,Fires,81,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2012/2013,Count,Fires,53,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2013/2014,Count,Fires,38,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2014/2015,Count,Fires,53,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2015/2016,Count,Fires,68,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2016/2017,Count,Fires,31,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2017/2018,Count,Fires,39,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2018/2019,Count,Fires,38,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2019/2020,Count,Fires,48,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2020/2021,Count,Fires,33,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2021/2022,Count,Fires,30,All,Dwelling Fire
+S13002988,Dennistoun,Electoral Wards,2022/2023,Count,Fires,33,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2009/2010,Count,Fires,35,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2010/2011,Count,Fires,27,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2011/2012,Count,Fires,22,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2012/2013,Count,Fires,23,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2013/2014,Count,Fires,18,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2014/2015,Count,Fires,29,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2015/2016,Count,Fires,25,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2016/2017,Count,Fires,31,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2017/2018,Count,Fires,30,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2018/2019,Count,Fires,30,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2019/2020,Count,Fires,26,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2020/2021,Count,Fires,23,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2021/2022,Count,Fires,31,All,Dwelling Fire
+S13002989,Partick East/Kelvindale,Electoral Wards,2022/2023,Count,Fires,26,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2009/2010,Count,Fires,40,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2010/2011,Count,Fires,41,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2011/2012,Count,Fires,27,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2012/2013,Count,Fires,34,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2013/2014,Count,Fires,27,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2014/2015,Count,Fires,28,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2015/2016,Count,Fires,29,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2016/2017,Count,Fires,32,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2017/2018,Count,Fires,38,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2018/2019,Count,Fires,34,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2019/2020,Count,Fires,33,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2020/2021,Count,Fires,25,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2021/2022,Count,Fires,21,All,Dwelling Fire
+S13003133,North East,Electoral Wards,2022/2023,Count,Fires,24,All,Dwelling Fire

@@ -8,6 +8,7 @@ import pandas as pd
 
 HERE = Path(__file__).resolve().parent
 WARDS_GEOJSON = HERE.parent / "backend" / "data" / "glasgow_wards.geojson"
+WARD_HISTORY_CSV = HERE / "reference" / "glasgow_ward_dwelling_fires.csv"
 
 
 def forecast_ward(counts):
@@ -44,8 +45,8 @@ def forecast_ward(counts):
                       "data_quality": "sufficient" if n >= 6 else "limited"}
 
 
-def project_wards(fire_records, ward_codes):
-    """Fit each ward's observed, consecutive financial-year dwelling-fire counts."""
+def ward_observations(fire_records, ward_codes):
+    """Select and validate the official annual dwelling-fire counts for the mapped wards."""
     fire_records = fire_records.rename(columns={
         "GeographyCode": "FeatureCode",
         "GeographyName": "FeatureName",
@@ -60,20 +61,41 @@ def project_wards(fire_records, ward_codes):
 
     if set(rows["FeatureCode"]) != set(ward_codes):
         raise ValueError("Missing dwelling-fire counts for one or more mapped wards")
-    rows["Value"] = pd.to_numeric(rows["Value"], errors="raise")
-    if not np.isfinite(rows["Value"]).all() or rows["Value"].lt(0).any():
-        raise ValueError("Dwelling-fire counts must be finite and non-negative")
+    if "GeographyType" in rows and not rows["GeographyType"].eq("Electoral Wards").all():
+        raise ValueError("Ward dwelling-fire counts must use Electoral Wards geography")
+    if "Units" in rows and not rows["Units"].eq("Fires").all():
+        raise ValueError("Ward dwelling-fire counts must use the Fires unit")
+    rows["Value"] = pd.to_numeric(rows["Value"], errors="coerce")
+    if rows["Value"].isna().any():
+        raise ValueError("Missing dwelling-fire count; use a recorded zero only")
+    if (not np.isfinite(rows["Value"]).all() or rows["Value"].lt(0).any()
+            or rows["Value"].mod(1).ne(0).any()):
+        raise ValueError("Dwelling-fire counts must be finite non-negative integers")
+    rows["Value"] = rows["Value"].astype(int)
 
-    projections = []
+    keys = ["FeatureCode", "DateCode"]
+    if rows.duplicated(keys).any():
+        raise ValueError("Duplicate ward and financial-year observation")
+    rows = rows.sort_values(keys)
+    dates = rows["DateCode"].astype("string").str.extract(r"^(\d{4})/(\d{4})$")
+    if dates.isna().any().any():
+        raise ValueError("Expected financial years in YYYY/YYYY format")
+    rows["start_year"] = dates[0].astype(int)
+    rows["end_year"] = dates[1].astype(int)
+    if not rows["end_year"].eq(rows["start_year"] + 1).all():
+        raise ValueError("Each financial year must span consecutive calendar years")
     for ward_code, annual in rows.groupby("FeatureCode"):
-        annual = annual.sort_values("DateCode")
-        dates = annual["DateCode"].str.extract(r"^(\d{4})/(\d{4})$")
-        if dates.isna().any().any():
-            raise ValueError(f"{ward_code}: expected financial years in YYYY/YYYY format")
-        starts, ends = (dates[column].astype(int).to_numpy() for column in (0, 1))
-        if not ((ends == starts + 1).all() and (np.diff(starts) == 1).all()):
+        if not (np.diff(annual["start_year"]) == 1).all():
             raise ValueError(f"{ward_code}: financial years must be consecutive and unique")
+    return rows
 
+
+def project_wards(fire_records, ward_codes):
+    """Fit each ward's observed, consecutive financial-year dwelling-fire counts."""
+    projections = []
+    for ward_code, annual in ward_observations(fire_records, ward_codes).groupby("FeatureCode"):
+        starts = annual["start_year"].to_numpy()
+        ends = annual["end_year"].to_numpy()
         counts = annual["Value"].to_numpy(dtype=float)
         result = forecast_ward(counts)
         row = {
@@ -99,15 +121,23 @@ def project_wards(fire_records, ward_codes):
     return pd.DataFrame(projections)
 
 
-def load_ward_projections(fire_csv):
+def mapped_ward_codes():
     with WARDS_GEOJSON.open() as source:
-        ward_codes = {feature["properties"]["ward_id"] for feature in json.load(source)["features"]}
-    return project_wards(pd.read_csv(fire_csv), ward_codes)
+        return {feature["properties"]["ward_id"] for feature in json.load(source)["features"]}
+
+
+def load_ward_projections(fire_csv=WARD_HISTORY_CSV):
+    return project_wards(pd.read_csv(fire_csv), mapped_ward_codes())
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--fire-csv", type=Path, default=WARD_HISTORY_CSV)
+    args = parser.parse_args()
     output = HERE / "output"
     output.mkdir(exist_ok=True)
-    forecasts = load_ward_projections(HERE / "raw" / "fire_statistics_scotland.csv")
+    forecasts = load_ward_projections(args.fire_csv)
     forecasts.to_csv(output / "glasgow_ward_forecasts.csv", index=False)
     print(f"Saved {len(forecasts)} annual ward projections to {output}")
