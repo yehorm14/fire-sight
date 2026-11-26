@@ -5,11 +5,12 @@ import logging
 import math
 import os
 import threading
+import time
 from collections import OrderedDict, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -708,7 +709,7 @@ def _ai_context(mode, record, source: str = "mock", lead: Optional[int] = None) 
 
 
 # Bounded LRU cache of successful OpenAI explanations, keyed by
-# (mode, record id, source, lead). Failures are never cached so they can retry.
+# (mode, record id, source, period, model, source version). Failures are never cached.
 EXPLANATION_CACHE_MAX = 256
 _explanation_cache: "OrderedDict[tuple, str]" = OrderedDict()
 # FastAPI runs sync endpoints in a threadpool, so guard the LRU bookkeeping.
@@ -731,15 +732,87 @@ def _explanation_cache_put(key, text):
             _explanation_cache.popitem(last=False)
 
 
-def openai_explanation(mode, record, source: str = "mock", lead: Optional[int] = None, record_id=None):
-    if not os.getenv("OPENAI_API_KEY"):
+# --- Spend controls for live explanations -------------------------------------
+# Live provider calls are OFF unless EXPLAIN_LIVE_ENABLED is truthy *and* a key is set,
+# so the public demo is template-only by default. When enabled, every provider call
+# must pass three gates (cache hits are free and skip them): a per-client sliding
+# window, a bounded number of in-flight calls, and a global budget per rolling day.
+# Rejected requests get the template text and never reach the provider. Limits are
+# in-process (per worker); CORS is not a control because non-browser clients ignore it.
+EXPLAIN_LIVE_ENV = "EXPLAIN_LIVE_ENABLED"
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.getenv(name, "")))
+    except ValueError:
+        return default
+
+
+def live_explanations_enabled() -> bool:
+    return (
+        os.getenv(EXPLAIN_LIVE_ENV, "").lower() in {"1", "true", "yes"}
+        and bool(os.getenv("OPENAI_API_KEY"))
+    )
+
+
+_spend_lock = threading.Lock()
+_client_calls: Dict[str, List[float]] = {}
+_global_calls: List[float] = []
+_inflight_keys: set[tuple] = set()
+_MAX_TRACKED_CLIENTS = 1024
+
+
+def _acquire_provider_slot(client_id: str, cache_key: tuple) -> bool:
+    """Reserve one upstream attempt for an uncached explanation within all limits."""
+    per_client = _env_int("EXPLAIN_CLIENT_LIMIT", 5)
+    window = _env_int("EXPLAIN_CLIENT_WINDOW_SECONDS", 60)
+    daily = _env_int("EXPLAIN_DAILY_BUDGET", 200)
+    max_inflight = _env_int("EXPLAIN_MAX_CONCURRENCY", 2)
+
+    with _spend_lock:
+        if not window or len(_inflight_keys) >= max_inflight or cache_key in _inflight_keys:
+            return False
+        # A completion may have filled the cache since the caller checked.
+        if _explanation_cache_get(cache_key) is not None:
+            return False
+
+        now = time.monotonic()
+        _global_calls[:] = [t for t in _global_calls if now - t < 86400]
+        recent = [t for t in _client_calls.get(client_id, []) if now - t < window]
+        if len(recent) >= per_client or len(_global_calls) >= daily:
+            return False
+        if client_id not in _client_calls and len(_client_calls) >= _MAX_TRACKED_CLIENTS:
+            expired = [key for key, calls in _client_calls.items() if now - calls[-1] >= window]
+            for key in expired:
+                del _client_calls[key]
+            if len(_client_calls) >= _MAX_TRACKED_CLIENTS:
+                return False
+
+        recent.append(now)
+        _client_calls[client_id] = recent
+        _global_calls.append(now)
+        _inflight_keys.add(cache_key)
+        return True
+
+
+def _release_provider_slot(cache_key: tuple) -> None:
+    with _spend_lock:
+        _inflight_keys.remove(cache_key)
+
+
+def openai_explanation(
+    mode: str, record, *, source: str, source_version: str, lead: Optional[int],
+    record_id: str, client_id: str,
+):
+    if not live_explanations_enabled():
         return None
 
-    cache_key = (mode, record_id, source, lead) if record_id is not None else None
-    if cache_key is not None:
-        cached = _explanation_cache_get(cache_key)
-        if cached is not None:
-            return cached
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    cache_key = (mode, record_id, source, lead, model, source_version)
+    cached = _explanation_cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         from openai import OpenAI
@@ -753,10 +826,13 @@ def openai_explanation(mode, record, source: str = "mock", lead: Optional[int] =
         "(3) the single most impactful intervention. One sentence each. No incident predictions."
     )
 
+    if not _acquire_provider_slot(client_id, cache_key):
+        return _explanation_cache_get(cache_key)
+
     try:
-        client = OpenAI(timeout=15.0)
+        client = OpenAI(timeout=15.0, max_retries=0)
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": context},
@@ -765,11 +841,13 @@ def openai_explanation(mode, record, source: str = "mock", lead: Optional[int] =
             max_tokens=160,
         )
         text = response.choices[0].message.content
-        if text and cache_key is not None:
+        if text:
             _explanation_cache_put(cache_key, text)
         return text
     except Exception:
         return None
+    finally:
+        _release_provider_slot(cache_key)
 
 
 @app.get("/")
@@ -945,6 +1023,7 @@ def get_premises(premises_id: str):
 
 @app.get("/api/explain")
 def explain(
+    request: Request,
     mode: str,
     record_id: str = Query(..., alias="id"),
     source: Optional[str] = None,
@@ -952,17 +1031,22 @@ def explain(
 ):
     if source is None:
         source = "model" if mode == "zone" else "mock"
+
+    provider_lead = None
+    can_use_provider = True
     if mode == "ward":
         record = wards_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Ward not found")
-        model_lead = 1 if lead is None else lead
-        resolved = resolve_source(source, [record_id], lead=model_lead)
-        fallback = (
-            fallback_ward_explanation_model(record, model_lead)
-            if resolved["data_source"] == "model"
-            else fallback_ward_explanation(record, 6 if lead is None else lead)
-        )
+        provider_lead = lead if lead is not None else (1 if source == "model" else 6)
+        resolved = resolve_source(source, [record_id], lead=provider_lead)
+        if resolved["data_source"] == "model":
+            fallback = fallback_ward_explanation_model(record, provider_lead)
+        else:
+            fallback = fallback_ward_explanation(record, provider_lead)
+            can_use_provider = (
+                provider_lead == 0 or selected_projection(prediction_for(record), provider_lead) is not None
+            )
     elif mode == "zone":
         resolved = resolve_source(source, mode=mode)
         record = zones_by_id.get(record_id)
@@ -978,7 +1062,14 @@ def explain(
     else:
         raise HTTPException(status_code=400, detail="Mode must be 'ward', 'zone', or 'premises'")
 
-    live_text = openai_explanation(mode, record, source=source, lead=lead, record_id=record_id)
+    live_text = (
+        openai_explanation(
+            mode, record, source=resolved["data_source"], source_version=resolved["source_version"],
+            lead=provider_lead, record_id=record_id,
+            client_id=request.client.host if request.client else "unknown",
+        )
+        if can_use_provider else None
+    )
     return {
         "id": record_id,
         "mode": mode,

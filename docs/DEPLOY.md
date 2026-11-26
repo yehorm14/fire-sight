@@ -9,7 +9,15 @@
 | `VITE_EVENTS_API_URL` | frontend, optional | External events feed. Leave unset to hide events |
 | `VITE_EVENTS_DEMO` | frontend, optional | Set to `true` to show labelled sample events in place of the external feed |
 | `CORS_ORIGINS` | backend | Comma-separated allowed origins, default `http://localhost:5173,http://127.0.0.1:5173` |
-| `OPENAI_API_KEY`, `OPENAI_MODEL` | backend, optional | Live explanations, model defaults to `gpt-4o-mini` |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | backend, optional | Live explanations, model defaults to `gpt-4o-mini`. A key alone does nothing: also set `EXPLAIN_LIVE_ENABLED=1` |
+| `EXPLAIN_LIVE_ENABLED` | backend, optional | Default off: `/api/explain` serves templates only and never calls the provider. Set `1` to allow live calls |
+| `EXPLAIN_CLIENT_LIMIT`, `EXPLAIN_CLIENT_WINDOW_SECONDS` | backend, optional | Provider calls per client address per window, default 5 per 60 s |
+| `EXPLAIN_MAX_CONCURRENCY` | backend, optional | Provider calls in flight at once, default 2 |
+| `EXPLAIN_DAILY_BUDGET` | backend, optional | Provider calls per rolling 24 h across all clients, default 200 |
+
+Live explanations reserve one upstream attempt before calling the provider. Automatic SDK retries are disabled, and provider failures still count toward the budget. Requests over a limit or already in flight receive template text (`source: "fallback"`). Successful cache hits are free. Cache keys use the resolved data source/version, record, effective period, and model.
+
+The Render blueprint runs one worker and leaves live calls disabled. Limits are measured in provider requests, not currency. Counters reset on process restart and are independent across workers and replicas. For a multi-worker or multi-replica deployment, keep live explanations disabled until quotas and concurrency are enforced by a shared service. Use a dedicated provider project with appropriate limits for additional spending control. Per-client quotas use the ASGI client address, which may be shared behind a proxy. CORS is unrelated to provider admission.
 
 Copy `backend/.env.example` to `backend/.env` and `frontend/fire_website/.env.example` to `.env.local`.
 

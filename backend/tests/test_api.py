@@ -194,8 +194,10 @@ class _FakeOpenAI:
     """Stand-in for openai.OpenAI that counts completion calls."""
 
     calls = 0
+    client_options = {}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
+        _FakeOpenAI.client_options = kwargs
         self.chat = type("Chat", (), {"completions": self})()
 
     def create(self, **kwargs):
@@ -212,8 +214,13 @@ def _use_fake_openai(monkeypatch):
     import main
 
     _FakeOpenAI.calls = 0
+    _FakeOpenAI.client_options = {}
     main._explanation_cache.clear()
+    monkeypatch.setattr(main, "_client_calls", {})
+    monkeypatch.setattr(main, "_global_calls", [])
+    monkeypatch.setattr(main, "_inflight_keys", set())
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("EXPLAIN_LIVE_ENABLED", "1")
     monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=_FakeOpenAI))
 
 
@@ -248,6 +255,130 @@ def test_explanation_cache_is_bounded(monkeypatch):
         main._explanation_cache_put(("ward", str(i), "mock", None), "x")
     assert len(main._explanation_cache) == 3
     assert ("ward", "0", "mock", None) not in main._explanation_cache
+
+
+def test_live_provider_is_off_by_default_even_with_key(client, monkeypatch):
+    _use_fake_openai(monkeypatch)
+    monkeypatch.delenv("EXPLAIN_LIVE_ENABLED")
+    body = client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()
+    assert body["source"] == "fallback"
+    assert _FakeOpenAI.calls == 0
+
+
+def test_client_quota_stops_provider_calls(client, monkeypatch):
+    _use_fake_openai(monkeypatch)
+    monkeypatch.setenv("EXPLAIN_CLIENT_LIMIT", "2")
+    base = f"/api/explain?mode=ward&id={GOVAN}&source=model"
+    sources = [client.get(f"{base}&lead={n}").json()["source"] for n in (1, 2, 3, 0)]
+    assert sources == ["live", "live", "fallback", "fallback"]
+    assert _FakeOpenAI.calls == 2
+    # a repeat of a cached request is still served without spending quota
+    assert client.get(f"{base}&lead=1").json()["source"] == "live"
+    assert _FakeOpenAI.calls == 2
+
+
+def test_global_budget_applies_across_clients(client, monkeypatch):
+    import asyncio
+
+    import httpx
+
+    import main
+
+    _use_fake_openai(monkeypatch)
+    monkeypatch.setenv("EXPLAIN_DAILY_BUDGET", "1")
+    base = f"/api/explain?mode=ward&id={GOVAN}&source=model"
+    assert client.get(f"{base}&lead=1").json()["source"] == "live"
+
+    async def request_from_other_client():
+        transport = httpx.ASGITransport(app=main.app, client=("192.0.2.1", 50000))
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as other:
+            return await other.get(f"{base}&lead=2")
+
+    assert asyncio.run(request_from_other_client()).json()["source"] == "fallback"
+    assert _FakeOpenAI.calls == 1
+
+
+def test_concurrency_cap_rejects_without_provider_call(client, monkeypatch):
+    import main
+
+    _use_fake_openai(monkeypatch)
+    monkeypatch.setenv("EXPLAIN_MAX_CONCURRENCY", "1")
+    assert main._acquire_provider_slot("other", ("other-key",))  # one call already in flight
+    body = client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()
+    assert body["source"] == "fallback"
+    assert _FakeOpenAI.calls == 0
+    main._release_provider_slot(("other-key",))
+    assert client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()["source"] == "live"
+
+
+def test_slot_released_after_provider_error(client, monkeypatch):
+    import main
+
+    _use_fake_openai(monkeypatch)
+
+    def boom(self, **kwargs):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(_FakeOpenAI, "create", boom)
+    body = client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()
+    assert body["source"] == "fallback"
+    assert not main._inflight_keys
+    assert _FakeOpenAI.client_options["max_retries"] == 0
+    assert main._global_calls  # The failed upstream attempt still consumed budget.
+
+
+def test_cache_key_includes_data_version_and_model(client, monkeypatch):
+    import main
+
+    _use_fake_openai(monkeypatch)
+    url = f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1"
+    client.get(url)
+    monkeypatch.setattr(main, "MODEL_SOURCE_VERSION", "other-data")
+    client.get(url)
+    assert _FakeOpenAI.calls == 2
+    monkeypatch.setenv("OPENAI_MODEL", "other-model")
+    client.get(url)
+    assert _FakeOpenAI.calls == 3
+
+
+def test_cache_reuses_equivalent_periods_and_skips_unknown_sample_period(client, monkeypatch):
+    _use_fake_openai(monkeypatch)
+    base = f"/api/explain?mode=ward&id={GOVAN}"
+    model = client.get(f"{base}&source=model").json()
+    assert client.get(f"{base}&source=model&lead=1").json() == model
+    mock = client.get(f"{base}&source=mock").json()
+    assert client.get(f"{base}&source=mock&lead=6").json() == mock
+    assert client.get(f"{base}&source=mock&lead=5").json()["source"] == "fallback"
+    assert _FakeOpenAI.calls == 2
+
+
+def test_concurrent_repeat_does_not_start_another_provider_call(client, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    _use_fake_openai(monkeypatch)
+    started = Event()
+    release = Event()
+    original_create = _FakeOpenAI.create
+
+    def hold(self, **kwargs):
+        started.set()
+        assert release.wait(5)
+        return original_create(self, **kwargs)
+
+    monkeypatch.setattr(_FakeOpenAI, "create", hold)
+    url = f"/api/explain?mode=ward&id={GOVAN}&source=model"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.get, url)
+        try:
+            assert started.wait(5)
+            repeated = pool.submit(client.get, f"{url}&lead=1")
+            assert repeated.result(timeout=5).json()["source"] == "fallback"
+        finally:
+            release.set()
+        assert first.result(timeout=5).json()["source"] == "live"
+    assert client.get(url).json()["source"] == "live"
+    assert _FakeOpenAI.calls == 1
 
 
 # --- model-source contract -------------------------------------------------
