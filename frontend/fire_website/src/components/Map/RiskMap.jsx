@@ -14,6 +14,9 @@ const RiskMap = ({
   dataSource = 'mock',
   nightMode = false,
   showPremises = true,
+  geoData,
+  selectedWardId,
+  onSelectWard,
 }) => {
   const [hoveredRiskBand, setHoveredRiskBand] = useState(null);
   const glasgowCenter = [55.8642, -4.2518];
@@ -35,7 +38,17 @@ const RiskMap = ({
           <TileLayer url={MAP_TILE_URL} attribution={MAP_TILE_ATTRIBUTION} />
         )}
 
-        <RiskLayer lead={lead} hoveredRiskBand={hoveredRiskBand} dataSource={dataSource} />
+        {geoData && (
+          <RiskLayer
+            key={dataSource}
+            lead={lead}
+            hoveredRiskBand={hoveredRiskBand}
+            dataSource={dataSource}
+            geoData={geoData}
+            selectedWardId={selectedWardId}
+            onSelectWard={onSelectWard}
+          />
+        )}
         {showPremises && <PremisesLayer timeFrame={overlayTimeFrame} focus="city-centre" riskBandFilter="high" />}
         <EventLayer timeFrame={overlayTimeFrame} />
       </MapContainer>

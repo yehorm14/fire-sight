@@ -297,3 +297,13 @@ In Model mode, use `properties.prediction.projections` from the ward GeoJSON or 
 The deprecated Model response keys `forecast_6mo`, `forecast_12mo` and `forecast_18mo` temporarily remain aliases for annual steps 1, 2 and 3. Update both the field lookup and its label. `forecast_lower` and `forecast_upper` alias only the first annual step. Historical CSVs can still be loaded. Regenerate the CSV to obtain per-year bounds for all three steps.
 
 Mock responses use `period_unit: month` with sample six-month bins ending at leads 6, 12 and 18, and have no calendar-year dates. The same mock values remain available under their original keys. `GET /api/explain` accepts a ward projection's `lead` to explain that period. An omitted lead uses the first projection and `lead=0` uses the baseline score.
+
+### Ward evidence and DataZones
+
+Model ward predictions include `last_observed_count` for `last_financial_year` from the SFRS
+annual history. The `projections` array contains estimates for later financial years.
+
+`GET /api/strategic/wards/{ward_id}/zones` returns the model DataZones assigned to a WD24 ward,
+with stable 2011 DataZone IDs, names from the Scottish Government lookup, vulnerability scores,
+and drivers. Results are ordered by score, then ID. Unknown ward IDs return 404. Unavailable
+lookup or model data returns 503.

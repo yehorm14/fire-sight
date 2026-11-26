@@ -80,7 +80,7 @@ The generator pins the workbook SHA-256 (`0a64937af60fb339a1be85cd2f65b6a3d410a3
 python data-pipeline/build_ward_lookup.py '/path/to/SIMD 2020v2 - datazone lookup - updated 2025.xlsx'
 ```
 
-Each DataZone is assigned to one ward by the published lookup. The ward vulnerability score is the population-weighted mean of its assigned DataZone scores, with an unweighted mean when the ward has no positive population weights. Drivers use population-weighted frequency of the assigned DataZones' model drivers. The API reports unmatched zones and wards without scored zones at startup.
+Each DataZone is assigned to one ward by the published lookup. The ward explorer uses the workbook’s `DZname` field with the stable 2011 DataZone code. The ward vulnerability score is the population-weighted mean of its assigned DataZone scores, with an unweighted mean when the ward has no positive population weights. Drivers use population-weighted frequency of the assigned DataZones' model drivers. The API reports unmatched zones and wards without scored zones at startup.
 
 ## Limitations
 

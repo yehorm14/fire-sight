@@ -33,7 +33,7 @@ const MapLegend = ({ hoveredRiskBand, onRiskBandHover }) => {
         <span>Low Risk (0 - 39)</span>
       </div>
       <p className="legend-subtitle">
-        Premises and event markers are illustrative sample data.
+        Premises and any sample events are illustrative overlays.
       </p>
     </div>
   );

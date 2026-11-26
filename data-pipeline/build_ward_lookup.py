@@ -26,18 +26,21 @@ def read_glasgow_mapping(workbook_path, ward_names):
     try:
         rows = iter(workbook[SHEET_NAME].values)
         columns = next(rows)
-        zone_col, council_col, ward_col, name_col = (
-            columns.index(name) for name in ("DZ", "LAcode", "MMWcode", "MMWname")
+        zone_col, zone_name_col, council_col, ward_col, ward_name_col = (
+            columns.index(name) for name in ("DZ", "DZname", "LAcode", "MMWcode", "MMWname")
         )
         for row in rows:
             if row[council_col] != GLASGOW_LA:
                 continue
-            zone_id, ward_id, ward_name = row[zone_col], row[ward_col], row[name_col]
+            zone_id, zone_name = row[zone_col], row[zone_name_col]
+            ward_id, ward_name = row[ward_col], row[ward_name_col]
             if zone_id in mapping:
                 raise ValueError(f"Duplicate Glasgow DataZone in workbook: {zone_id}")
             if ward_id not in ward_names or ward_names[ward_id] != ward_name:
                 raise ValueError(f"Workbook ward {ward_id} ({ward_name}) does not match May 2024 ward data")
-            mapping[zone_id] = ward_id
+            if not isinstance(zone_name, str) or not zone_name.strip():
+                raise ValueError(f"Missing official name for Glasgow DataZone {zone_id}")
+            mapping[zone_id] = (ward_id, zone_name.strip())
     finally:
         workbook.close()
     return mapping
@@ -56,7 +59,7 @@ def build_lookup(workbook_path):
     mapping = read_glasgow_mapping(workbook_path, ward_names)
     missing_zones = zones - mapping.keys()
     extra_zones = mapping.keys() - zones
-    missing_wards = ward_names.keys() - set(mapping.values())
+    missing_wards = ward_names.keys() - {ward for ward, _ in mapping.values()}
     if missing_zones or extra_zones or missing_wards:
         raise ValueError(
             f"Lookup coverage differs from app data. Missing zones: {sorted(missing_zones)}. "
@@ -66,8 +69,11 @@ def build_lookup(workbook_path):
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT_PATH.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(("datazone_id", "ward_id", "datazone_vintage", "ward_vintage"))
-        writer.writerows((zone, ward, "DZ2011", "WD24") for zone, ward in sorted(mapping.items()))
+        writer.writerow(("datazone_id", "ward_id", "datazone_vintage", "ward_vintage", "datazone_name"))
+        writer.writerows(
+            (zone, ward, "DZ2011", "WD24", zone_name)
+            for zone, (ward, zone_name) in sorted(mapping.items())
+        )
     print(f"Wrote {len(mapping)} DataZones across {len(ward_names)} wards to {OUTPUT_PATH}")
 
 
