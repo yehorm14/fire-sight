@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import TopRiskAreas from './TopRiskAreas'
 
 const ward = (id, name, score) => ({
@@ -49,5 +49,27 @@ describe('TopRiskAreas', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
     render(<TopRiskAreas dataSource="mock" />)
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load the risk rankings.')
+  })
+})
+
+describe('TopRiskAreas model source unavailable', () => {
+  it('explains that model data is unavailable and retries', async () => {
+    const unavailable = {
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: { error: 'model_unavailable', reasons: ['DataZone scores are not loaded'] } }),
+    }
+    const fetchMock = vi.fn().mockResolvedValueOnce(unavailable)
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<TopRiskAreas dataSource="model" />)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Model data is unavailable')
+    expect(alert).toHaveTextContent('DataZone scores are not loaded')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await screen.findByText('No ranked areas available.')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
