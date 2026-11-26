@@ -88,6 +88,8 @@ After the hackathon I did the cleanup in this copy of the repo: tests, CI, deplo
 
 ## Credits / Licence
 
+Fire Sight's original code is available under the [MIT License](LICENSE).
+
 - Fire statistics by type of incident: Scottish Fire and Rescue Service, via [data.gov.scot](https://data.gov.scot/dataset/fire___type_of_incident).
 - Scottish Index of Multiple Deprivation 2020 (SIMD 2020v2) and indicator data: Scottish Government.
 - Both are used under the Open Government Licence v3.0.
