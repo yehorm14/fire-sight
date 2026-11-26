@@ -1,5 +1,7 @@
 """Smoke tests for the Fire Sight API, run against the committed data files."""
 
+import pytest
+
 GOVAN = "S13002971"
 NORTH_EAST = "S13003133"  # last ward in the model output; easy to miss in filters
 
@@ -192,8 +194,10 @@ class _FakeOpenAI:
     """Stand-in for openai.OpenAI that counts completion calls."""
 
     calls = 0
+    client_options = {}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
+        _FakeOpenAI.client_options = kwargs
         self.chat = type("Chat", (), {"completions": self})()
 
     def create(self, **kwargs):
@@ -210,8 +214,11 @@ def _use_fake_openai(monkeypatch):
     import main
 
     _FakeOpenAI.calls = 0
+    _FakeOpenAI.client_options = {}
     main._explanation_cache.clear()
-    main._reset_spend_state()
+    monkeypatch.setattr(main, "_client_calls", {})
+    monkeypatch.setattr(main, "_global_calls", [])
+    monkeypatch.setattr(main, "_inflight_keys", set())
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("EXPLAIN_LIVE_ENABLED", "1")
     monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=_FakeOpenAI))
@@ -262,7 +269,7 @@ def test_client_quota_stops_provider_calls(client, monkeypatch):
     _use_fake_openai(monkeypatch)
     monkeypatch.setenv("EXPLAIN_CLIENT_LIMIT", "2")
     base = f"/api/explain?mode=ward&id={GOVAN}&source=model"
-    sources = [client.get(f"{base}&lead={n}").json()["source"] for n in (1, 2, 3, 4)]
+    sources = [client.get(f"{base}&lead={n}").json()["source"] for n in (1, 2, 3, 0)]
     assert sources == ["live", "live", "fallback", "fallback"]
     assert _FakeOpenAI.calls == 2
     # a repeat of a cached request is still served without spending quota
@@ -271,14 +278,23 @@ def test_client_quota_stops_provider_calls(client, monkeypatch):
 
 
 def test_global_budget_applies_across_clients(client, monkeypatch):
+    import asyncio
+
+    import httpx
+
     import main
 
     _use_fake_openai(monkeypatch)
     monkeypatch.setenv("EXPLAIN_DAILY_BUDGET", "1")
     base = f"/api/explain?mode=ward&id={GOVAN}&source=model"
     assert client.get(f"{base}&lead=1").json()["source"] == "live"
-    main._client_calls.clear()  # a different client address; the global budget still holds
-    assert client.get(f"{base}&lead=2").json()["source"] == "fallback"
+
+    async def request_from_other_client():
+        transport = httpx.ASGITransport(app=main.app, client=("192.0.2.1", 50000))
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as other:
+            return await other.get(f"{base}&lead=2")
+
+    assert asyncio.run(request_from_other_client()).json()["source"] == "fallback"
     assert _FakeOpenAI.calls == 1
 
 
@@ -287,11 +303,11 @@ def test_concurrency_cap_rejects_without_provider_call(client, monkeypatch):
 
     _use_fake_openai(monkeypatch)
     monkeypatch.setenv("EXPLAIN_MAX_CONCURRENCY", "1")
-    assert main._acquire_provider_slot("other")  # one call already in flight
+    assert main._acquire_provider_slot("other", ("other-key",))  # one call already in flight
     body = client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()
     assert body["source"] == "fallback"
     assert _FakeOpenAI.calls == 0
-    main._release_provider_slot()
+    main._release_provider_slot(("other-key",))
     assert client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()["source"] == "live"
 
 
@@ -306,7 +322,9 @@ def test_slot_released_after_provider_error(client, monkeypatch):
     monkeypatch.setattr(_FakeOpenAI, "create", boom)
     body = client.get(f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1").json()
     assert body["source"] == "fallback"
-    assert main._inflight == 0
+    assert not main._inflight_keys
+    assert _FakeOpenAI.client_options["max_retries"] == 0
+    assert main._global_calls  # The failed upstream attempt still consumed budget.
 
 
 def test_cache_key_includes_data_version_and_model(client, monkeypatch):
@@ -315,9 +333,221 @@ def test_cache_key_includes_data_version_and_model(client, monkeypatch):
     _use_fake_openai(monkeypatch)
     url = f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1"
     client.get(url)
-    monkeypatch.setattr(main, "_data_version_cache", "other-data")
+    monkeypatch.setattr(main, "MODEL_SOURCE_VERSION", "other-data")
     client.get(url)
     assert _FakeOpenAI.calls == 2
     monkeypatch.setenv("OPENAI_MODEL", "other-model")
     client.get(url)
     assert _FakeOpenAI.calls == 3
+
+
+def test_cache_reuses_equivalent_periods_and_skips_unknown_sample_period(client, monkeypatch):
+    _use_fake_openai(monkeypatch)
+    base = f"/api/explain?mode=ward&id={GOVAN}"
+    model = client.get(f"{base}&source=model").json()
+    assert client.get(f"{base}&source=model&lead=1").json() == model
+    mock = client.get(f"{base}&source=mock").json()
+    assert client.get(f"{base}&source=mock&lead=6").json() == mock
+    assert client.get(f"{base}&source=mock&lead=5").json()["source"] == "fallback"
+    assert _FakeOpenAI.calls == 2
+
+
+def test_concurrent_repeat_does_not_start_another_provider_call(client, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    _use_fake_openai(monkeypatch)
+    started = Event()
+    release = Event()
+    original_create = _FakeOpenAI.create
+
+    def hold(self, **kwargs):
+        started.set()
+        assert release.wait(5)
+        return original_create(self, **kwargs)
+
+    monkeypatch.setattr(_FakeOpenAI, "create", hold)
+    url = f"/api/explain?mode=ward&id={GOVAN}&source=model"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.get, url)
+        try:
+            assert started.wait(5)
+            repeated = pool.submit(client.get, f"{url}&lead=1")
+            assert repeated.result(timeout=5).json()["source"] == "fallback"
+        finally:
+            release.set()
+        assert first.result(timeout=5).json()["source"] == "live"
+    assert client.get(url).json()["source"] == "live"
+    assert _FakeOpenAI.calls == 1
+
+
+# --- model-source contract -------------------------------------------------
+
+def _all_source_urls():
+    return [
+        ("/api/strategic/wards", {}),
+        ("/api/strategic/wards.geojson", {}),
+        (f"/api/strategic/wards/{GOVAN}", {}),
+        ("/api/explain", {"mode": "ward", "id": GOVAN}),
+    ]
+
+
+def test_every_endpoint_reports_resolved_source_and_version(client):
+    for url, extra in _all_source_urls():
+        model = client.get(url, params={**extra, "source": "model"})
+        assert model.status_code == 200, url
+        body = model.json()
+        if isinstance(body, list):
+            body = body[0]
+        meta = body.get("properties", body)
+        assert meta["data_source"] == "model", url
+        assert len(meta["source_version"]) == 12, url
+        mock = client.get(url, params={**extra, "source": "mock"})
+        body = mock.json()
+        if isinstance(body, list):
+            body = body[0]
+        meta = body.get("properties", body)
+        assert (meta["data_source"], meta["source_version"]) == ("mock", "sample"), url
+
+
+def test_unknown_source_is_rejected_everywhere(client):
+    for url, extra in _all_source_urls():
+        assert client.get(url, params={**extra, "source": "bogus"}).status_code == 400, url
+
+
+def test_model_unavailable_is_503_never_sample_data(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "decile_to_model_score", {})
+    monkeypatch.setattr(main, "ward_aggregates", {"wards": {}})
+    for url, extra in _all_source_urls():
+        res = client.get(url, params={**extra, "source": "model"})
+        assert res.status_code == 503, url
+        detail = res.json()["detail"]
+        assert detail["error"] == "model_unavailable"
+        assert "model score lookup is empty" in detail["reasons"]
+        # demo mode is intentional and keeps working
+        assert client.get(url, params={**extra, "source": "mock"}).status_code == 200, url
+
+
+def test_missing_ward_forecasts_are_unavailable(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "ward_forecasts", {})
+    for url, extra in _all_source_urls():
+        assert client.get(url, params={**extra, "source": "model"}).status_code == 503, url
+
+
+def test_partial_forecasts_fail_collection_but_serve_covered_ward(client, monkeypatch):
+    import main
+
+    only_govan = {GOVAN: main.ward_forecasts[GOVAN]}
+    monkeypatch.setattr(main, "ward_forecasts", only_govan)
+    res = client.get("/api/strategic/wards.geojson", params={"source": "model"})
+    assert res.status_code == 503
+    assert "no ward forecast for" in res.json()["detail"]["reasons"][0]
+    assert client.get("/api/strategic/wards", params={"source": "model"}).status_code == 503
+    assert client.get(f"/api/strategic/wards/{GOVAN}", params={"source": "model"}).status_code == 200
+    assert client.get(f"/api/strategic/wards/{NORTH_EAST}", params={"source": "model"}).status_code == 503
+
+
+def test_sources_agree_across_list_geojson_detail_and_explain(client):
+    listed = {w["ward_id"]: w for w in client.get("/api/strategic/wards", params={"source": "model"}).json()}
+    geo = client.get("/api/strategic/wards.geojson", params={"source": "model"}).json()
+    detail = client.get(f"/api/strategic/wards/{GOVAN}", params={"source": "model"}).json()["properties"]
+    explain = client.get("/api/explain", params={"mode": "ward", "id": GOVAN, "source": "model"}).json()
+    by_id = {f["properties"]["id"]: f["properties"] for f in geo["features"]}
+    assert listed[GOVAN]["risk_score"] == by_id[GOVAN]["risk_score"] == detail["risk_score"]
+    assert listed[GOVAN]["score_method"] == by_id[GOVAN]["score_method"] == detail["score_method"]
+    assert listed[GOVAN]["data_source"] == explain["data_source"] == geo["data_source"] == "model"
+    assert listed[GOVAN]["source_version"] == explain["source_version"] == geo["source_version"] == detail["source_version"]
+
+
+def test_missing_ward_score_does_not_fall_back_to_sample(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "ward_aggregates", {"wards": {}})
+    ward_decile = main.wards_by_id[GOVAN]["properties"]["simd_decile"]
+    remaining = {
+        decile: score for decile, score in main.decile_to_model_score.items()
+        if decile != ward_decile
+    }
+    assert remaining
+    monkeypatch.setattr(main, "decile_to_model_score", remaining)
+
+    for url, extra in _all_source_urls():
+        model = client.get(url, params={**extra, "source": "model"})
+        assert model.status_code == 503, url
+        detail = model.json()["detail"]
+        assert detail["error"] == "model_unavailable"
+        assert detail["reasons"][0].startswith("no model score for: ")
+        assert GOVAN in detail["reasons"][0]
+        assert client.get(url, params={**extra, "source": "mock"}).status_code == 200, url
+
+
+def test_explain_reports_the_source_that_supplies_the_record(client):
+    premises = {"mode": "premises", "id": "P001"}
+    response = client.get("/api/explain", params=premises)
+    assert response.status_code == 200
+    assert response.json()["data_source"] == "mock"
+    response = client.get("/api/explain", params={**premises, "source": "model"})
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "model_unavailable"
+
+    zone = client.get("/api/zones/top", params={"n": 1}).json()[0]
+    zone_params = {"mode": "zone", "id": zone["zoneid"]}
+    response = client.get("/api/explain", params=zone_params)
+    assert response.status_code == 200
+    assert response.json()["data_source"] == "model"
+    assert response.json()["source_version"]
+    assert client.get("/api/explain", params={**zone_params, "source": "mock"}).status_code == 400
+
+
+def test_empty_forecast_row_is_unavailable(client, monkeypatch):
+    import main
+
+    monkeypatch.setitem(main.ward_forecasts, GOVAN, {"ward_id": GOVAN})
+    for url, extra in _all_source_urls():
+        response = client.get(url, params={**extra, "source": "model"})
+        assert response.status_code == 503, url
+        detail = response.json()["detail"]
+        assert detail["error"] == "model_unavailable"
+        assert GOVAN in detail["reasons"][0]
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("forecast_2yr", float("nan")),
+    ("forecast_2yr", "12"),
+    ("forecast_2yr", -1),
+    ("financial_year_2yr", "2099/2100"),
+    ("financial_year_2yr", None),
+])
+def test_only_usable_ward_projection_leads_can_be_requested(client, monkeypatch, field, value):
+    import main
+
+    monkeypatch.setitem(main.ward_forecasts[GOVAN], field, value)
+    params = {"mode": "ward", "id": GOVAN, "source": "model"}
+    assert client.get("/api/explain", params={**params, "lead": 0}).status_code == 200
+    assert client.get("/api/explain", params=params).status_code == 200
+    result = client.get("/api/explain", params={**params, "lead": 2})
+    assert result.status_code == 503
+    assert result.json()["detail"]["error"] == "model_unavailable"
+    for path, _ in _all_source_urls()[:-1]:
+        assert client.get(path, params={"source": "model"}).status_code == 503, path
+
+
+def test_ward_collections_require_geography_for_model_source(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "wards_geojson", {"type": "FeatureCollection", "features": []})
+    monkeypatch.setattr(main, "wards_by_id", {})
+    for path in ("/api/strategic/wards", "/api/strategic/wards.geojson"):
+        model = client.get(path, params={"source": "model"})
+        assert model.status_code == 503, path
+        assert model.json()["detail"]["error"] == "model_unavailable"
+        assert client.get(path, params={"source": "mock"}).status_code == 200, path
+
+    zone_id = client.get("/api/zones/top", params={"n": 1}).json()[0]["zoneid"]
+    zone = client.get("/api/explain", params={"mode": "zone", "id": zone_id, "source": "model"})
+    assert zone.status_code == 200
+    assert zone.json()["data_source"] == "model"

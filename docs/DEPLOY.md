@@ -14,7 +14,9 @@
 | `EXPLAIN_MAX_CONCURRENCY` | backend, optional | Provider calls in flight at once, default 2 |
 | `EXPLAIN_DAILY_BUDGET` | backend, optional | Provider calls per rolling 24 h across all clients, default 200 |
 
-Live explanation limits: they apply only before a provider call, so cache hits and template fallbacks are free. A request over any limit gets the template text (`source: "fallback"`) and the provider is not called. Counters are in memory and per worker, reset on restart, and the client address is the direct peer (behind a proxy this may be the proxy, so the per-client limit then acts as a shared limit). CORS does not limit spend because non-browser clients ignore it. Cached text is keyed by mode, id, source, lead, model and the data manifest fingerprint (file hashes and periods), so refreshed data never serves stale text.
+Live explanations reserve one upstream attempt before calling the provider. Automatic SDK retries are disabled, and provider failures still count toward the budget. Requests over a limit or already in flight receive template text (`source: "fallback"`). Successful cache hits are free. Cache keys use the resolved data source/version, record, effective period, and model.
+
+The Render blueprint runs one worker and leaves live calls disabled. Limits are measured in provider requests, not currency. Counters reset on process restart and are independent across workers and replicas. For a multi-worker or multi-replica deployment, keep live explanations disabled until quotas and concurrency are enforced by a shared service. Use a dedicated provider project with appropriate limits for additional spending control. Per-client quotas use the ASGI client address, which may be shared behind a proxy. CORS is unrelated to provider admission.
 
 Copy `backend/.env.example` to `backend/.env` and `frontend/fire_website/.env.example` to `.env.local`.
 

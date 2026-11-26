@@ -28,6 +28,12 @@ def test_drivers_come_from_the_wards_own_zones():
     assert result["wards"]["W2"]["drivers"] == ["C"]
 
 
+def test_zero_weight_zones_do_not_supply_drivers():
+    zones = [{**ZONES[0], "population": 0}, ZONES[2]]
+    result = wa.aggregate_wards(zones, {"Z1": "W1", "Z3": "W1"}, ["W1"])
+    assert result["wards"]["W1"]["drivers"] == ["C"]
+
+
 def test_two_wards_in_same_decile_get_different_scores():
     # The old proxy gave every ward in a decile the same citywide mean.
     result = wa.aggregate_wards(ZONES, {"Z1": "W1", "Z2": "W2"}, ["W1", "W2"])
@@ -63,7 +69,8 @@ def test_load_lookup_validates(tmp_path):
         wa.load_lookup(bad)
 
 
-def test_model_mode_without_lookup_is_labelled_proxy_and_drops_sample_fields(client):
+def test_model_mode_without_lookup_is_labelled_proxy_and_drops_sample_fields(client, monkeypatch):
+    monkeypatch.setitem(main.ward_aggregates, "wards", {})
     props = client.get("/api/strategic/wards/S13002967", params={"source": "model"}).json()["properties"]
     assert props["score_method"] == "simd_decile_proxy"
     assert "Proxy" in props["score_method_note"]
@@ -84,3 +91,23 @@ def test_model_mode_with_lookup_uses_ward_zones(client, monkeypatch):
     assert props["risk_score"] == expected
     assert props["drivers"] == agg["wards"][ward]["drivers"]
     assert "population-weighted" in props["score_method_note"]
+
+
+def test_committed_lookup_covers_every_modeled_zone_and_ward(client):
+    lookup = wa.load_lookup(main.DATAZONE_WARD_LOOKUP_CSV)
+    assert lookup["datazone_vintage"] == "DZ2011"
+    assert lookup["ward_vintage"] == "WD24"
+    assert set(lookup["mapping"]) == set(main.zones_by_id)
+    assert set(lookup["mapping"].values()) == set(main.wards_by_id)
+    assert main.ward_aggregates["unmatched_zones"] == []
+    assert main.ward_aggregates["wards_without_zones"] == []
+
+    response = client.get("/api/strategic/wards.geojson", params={"source": "model"})
+    assert response.status_code == 200
+    properties = [feature["properties"] for feature in response.json()["features"]]
+    assert len(properties) == len(main.wards_by_id)
+    assert sum(ward["zone_count"] for ward in properties) == len(main.zones_by_id)
+    for ward in properties:
+        assert ward["score_method"] == "datazone_aggregate"
+        assert ward["zone_count"] > 0
+        assert set(main.SAMPLE_WARD_PROPS).isdisjoint(ward.keys() - {"drivers"})

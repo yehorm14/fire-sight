@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import json
 import logging
 import math
@@ -168,8 +169,8 @@ if ward_lookup is not None:
     )
     if ward_aggregates["unmatched_zones"] or ward_aggregates["wards_without_zones"]:
         logger.warning(
-            "DataZone-to-ward aggregation: %d unmatched zones, wards without zones: %s",
-            len(ward_aggregates["unmatched_zones"]),
+            "DataZone-to-ward aggregation: unmatched zone IDs: %s, wards without scored zones: %s",
+            ward_aggregates["unmatched_zones"],
             ward_aggregates["wards_without_zones"],
         )
 
@@ -180,15 +181,13 @@ SAMPLE_WARD_PROPS = (
 )
 
 
-def ward_model_score(props) -> int:
-    """Model score for a ward: geographic aggregate if mapped, else the SIMD-decile proxy."""
+def ward_model_score(props) -> Optional[int]:
+    """Geographic aggregate or documented decile proxy, when either is available."""
     agg = ward_aggregates["wards"].get(props["ward_id"])
     if agg is not None:
         return agg["risk_score"]
     decile = props.get("simd_decile")
-    if decile is not None:
-        return decile_to_model_score.get(int(decile), props["risk_score"])
-    return props["risk_score"]
+    return decile_to_model_score.get(int(decile)) if decile is not None else None
 
 
 def ward_model_provenance(props) -> Dict[str, Any]:
@@ -204,7 +203,7 @@ def ward_model_provenance(props) -> Dict[str, Any]:
         "score_method": "simd_decile_proxy",
         "score_method_note": (
             "Proxy, not a geographic ward result: citywide mean model score of DataZones sharing the "
-            "ward's sample SIMD decile. Awaiting an official DataZone-to-ward lookup."
+            "ward's sample SIMD decile. No geographic score is available for this ward."
         ),
         "drivers": [],
         "zone_count": None,
@@ -305,24 +304,42 @@ def ward_summary(feature):
 def annual_ward_prediction(row):
     """Read either regenerated annual columns or the original mislabeled annual CSV."""
     first, last, years = (row.get(key) for key in ("first_year", "last_year", "years_of_data"))
-    first_period = row.get("first_financial_year") or (f"{first}/{first + 1}" if first is not None else None)
-    last_period = row.get("last_financial_year") or (f"{last - 1}/{last}" if last is not None else None)
+    first_period = row.get("first_financial_year") or (f"{first}/{first + 1}" if isinstance(first, int) else None)
+    last_period = row.get("last_financial_year") or (f"{last - 1}/{last}" if isinstance(last, int) else None)
+    last_observed_start = data_contract.financial_year_start(last_period)
     legacy_keys = ("forecast_6mo", "forecast_12mo", "forecast_18mo")
     projections = []
-    for lead, legacy_key in enumerate(legacy_keys, start=1):
-        value = row.get(f"forecast_{lead}yr", row.get(legacy_key))
-        if value is None:
-            continue
-        start = last + lead - 1 if last is not None else None
-        projections.append({
-            "lead": lead,
-            "financial_year": row.get(f"financial_year_{lead}yr") or (
-                f"{start}/{start + 1}" if start is not None else None
-            ),
-            "forecast": value,
-            "lower": row.get(f"forecast_lower_{lead}yr", row.get("forecast_lower") if lead == 1 else None),
-            "upper": row.get(f"forecast_upper_{lead}yr", row.get("forecast_upper") if lead == 1 else None),
-        })
+    if last_observed_start is not None:
+        for lead, legacy_key in zip(data_contract.HORIZON_LEADS, legacy_keys):
+            expected_start = last_observed_start + lead
+            forecast_key = f"forecast_{lead}yr"
+            if forecast_key in row:
+                period = row.get(f"financial_year_{lead}yr")
+                count = row[forecast_key]
+                lower = row.get(f"forecast_lower_{lead}yr")
+                upper = row.get(f"forecast_upper_{lead}yr")
+                validate_bounds = True
+            else:
+                period = f"{expected_start}/{expected_start + 1}"
+                count = row.get(legacy_key)
+                lower = row.get("forecast_lower") if lead == 1 else None
+                upper = row.get("forecast_upper") if lead == 1 else None
+                validate_bounds = lower is not None or upper is not None
+
+            if data_contract.financial_year_start(period) != expected_start or not data_contract.is_nonnegative_count(count):
+                continue
+            if validate_bounds and (
+                not all(data_contract.is_nonnegative_count(v) for v in (lower, upper))
+                or not lower <= count <= upper
+            ):
+                continue
+            projections.append({
+                "lead": lead,
+                "financial_year": period,
+                "forecast": count,
+                "lower": lower,
+                "upper": upper,
+            })
 
     span = f" ({first}–{last})" if first is not None and last is not None else ""
     note = (
@@ -371,10 +388,110 @@ def projection_text(prediction, lead):
     return f"{label}. {prediction['note']}"
 
 
+SOURCES = ("mock", "model")
+
+
+def model_source_version() -> Optional[str]:
+    """Fingerprint the model inputs once, alongside loading them at startup."""
+    paths = [ZONES_CSV]
+    if ward_forecasts:
+        paths.append(WARD_FORECASTS_CSV)
+    if wards_by_id:
+        paths.append(WARDS_FILE)
+    if ward_lookup is not None:
+        paths.append(DATAZONE_WARD_LOOKUP_CSV)
+    try:
+        digest = hashlib.sha256()
+        for path in paths:
+            digest.update(data_contract.sha256_of(path).encode())
+        return digest.hexdigest()[:12]
+    except OSError:
+        return None
+
+
+MODEL_SOURCE_VERSION = model_source_version()
+
+
+def model_unavailable_reasons(
+    ward_ids: Optional[List[str]] = None, lead: Optional[int] = None
+) -> List[str]:
+    """Why the requested model result cannot be served right now."""
+    reasons = []
+    if not zones:
+        reasons.append("DataZone scores are not loaded")
+    elif MODEL_SOURCE_VERSION is None:
+        reasons.append("model source version is unavailable")
+    if ward_ids is None:
+        return reasons
+    if not wards_by_id or not wards_geojson.get("features"):
+        return [*reasons, "ward geography is not loaded"]
+
+    if not decile_to_model_score and not ward_aggregates["wards"]:
+        reasons.append("model score lookup is empty")
+    else:
+        missing_scores = sorted(
+            ward_id for ward_id in ward_ids
+            if ward_model_score(wards_by_id[ward_id]["properties"]) is None
+        )
+        if missing_scores:
+            reasons.append(f"no model score for: {', '.join(missing_scores)}")
+    if lead == 0:
+        return reasons  # The baseline explanation uses only the ward score.
+    if not ward_forecasts:
+        return [*reasons, "ward forecasts are not loaded"]
+
+    required_leads = set(data_contract.HORIZON_LEADS if lead is None else (lead,))
+    missing_forecasts = []
+    for ward_id in ward_ids:
+        prediction = annual_ward_prediction(ward_forecasts.get(ward_id, {}))
+        available_leads = {step["lead"] for step in prediction["projections"]}
+        if not required_leads.issubset(available_leads):
+            missing_forecasts.append(ward_id)
+    if missing_forecasts:
+        missing_ids = ", ".join(sorted(missing_forecasts))
+        leads = ", ".join(str(period) for period in sorted(required_leads))
+        reasons.append(f"no ward forecast for: {missing_ids} (requested annual leads: {leads})")
+    return reasons
+
+
+def resolve_source(
+    source: str,
+    ward_ids: Optional[List[str]] = None,
+    *,
+    mode: Optional[str] = None,
+    lead: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Single place that validates ?source= for every endpoint.
+
+    Returns {"data_source", "source_version"}. Unknown sources are 400; model requests
+    that cannot be served raise 503 instead of falling back to sample data.
+    """
+    if source not in SOURCES:
+        raise HTTPException(status_code=400, detail=f"source must be one of: {', '.join(SOURCES)}")
+    if source == "mock":
+        if mode == "zone":
+            raise HTTPException(status_code=400, detail="DataZone explanations use model data.")
+        return {"data_source": "mock", "source_version": "sample"}
+    reasons = (
+        ["premises are available as sample data only"]
+        if mode == "premises" else model_unavailable_reasons(ward_ids, lead)
+    )
+    if reasons:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "model_unavailable",
+                "message": "Model data is unavailable; use source=mock for the sample demo.",
+                "reasons": reasons,
+            },
+        )
+    return {"data_source": "model", "source_version": MODEL_SOURCE_VERSION}
+
+
 def ward_with_prediction(feature, use_model: bool = False):
     props = feature["properties"]
 
-    if use_model and decile_to_model_score:
+    if use_model:
         model_score = ward_model_score(props)
         wf = ward_forecasts.get(props["ward_id"], {})
         model_prediction = annual_ward_prediction(wf)
@@ -592,7 +709,7 @@ def _ai_context(mode, record, source: str = "mock", lead: Optional[int] = None) 
 
 
 # Bounded LRU cache of successful OpenAI explanations, keyed by
-# (mode, record id, source, lead). Failures are never cached so they can retry.
+# (mode, record id, source, period, model, source version). Failures are never cached.
 EXPLANATION_CACHE_MAX = 256
 _explanation_cache: "OrderedDict[tuple, str]" = OrderedDict()
 # FastAPI runs sync endpoints in a threadpool, so guard the LRU bookkeeping.
@@ -642,84 +759,60 @@ def live_explanations_enabled() -> bool:
 _spend_lock = threading.Lock()
 _client_calls: Dict[str, List[float]] = {}
 _global_calls: List[float] = []
-_inflight = 0
+_inflight_keys: set[tuple] = set()
 _MAX_TRACKED_CLIENTS = 1024
 
 
-def _reset_spend_state() -> None:
-    global _inflight
-    with _spend_lock:
-        _client_calls.clear()
-        _global_calls.clear()
-        _inflight = 0
-
-
-def _acquire_provider_slot(client_id: str) -> bool:
-    """Reserve one provider call, or return False (nothing reserved) if any limit is hit."""
-    global _inflight
-    now = time.monotonic()
+def _acquire_provider_slot(client_id: str, cache_key: tuple) -> bool:
+    """Reserve one upstream attempt for an uncached explanation within all limits."""
     per_client = _env_int("EXPLAIN_CLIENT_LIMIT", 5)
     window = _env_int("EXPLAIN_CLIENT_WINDOW_SECONDS", 60)
     daily = _env_int("EXPLAIN_DAILY_BUDGET", 200)
     max_inflight = _env_int("EXPLAIN_MAX_CONCURRENCY", 2)
+
     with _spend_lock:
+        if not window or len(_inflight_keys) >= max_inflight or cache_key in _inflight_keys:
+            return False
+        # A completion may have filled the cache since the caller checked.
+        if _explanation_cache_get(cache_key) is not None:
+            return False
+
+        now = time.monotonic()
         _global_calls[:] = [t for t in _global_calls if now - t < 86400]
         recent = [t for t in _client_calls.get(client_id, []) if now - t < window]
-        if len(_client_calls) > _MAX_TRACKED_CLIENTS:
-            for key in [k for k, v in _client_calls.items() if not v or now - v[-1] >= window]:
-                del _client_calls[key]
-        if len(recent) >= per_client or len(_global_calls) >= daily or _inflight >= max_inflight:
-            _client_calls[client_id] = recent
+        if len(recent) >= per_client or len(_global_calls) >= daily:
             return False
+        if client_id not in _client_calls and len(_client_calls) >= _MAX_TRACKED_CLIENTS:
+            expired = [key for key, calls in _client_calls.items() if now - calls[-1] >= window]
+            for key in expired:
+                del _client_calls[key]
+            if len(_client_calls) >= _MAX_TRACKED_CLIENTS:
+                return False
+
         recent.append(now)
         _client_calls[client_id] = recent
         _global_calls.append(now)
-        _inflight += 1
+        _inflight_keys.add(cache_key)
         return True
 
 
-def _release_provider_slot() -> None:
-    global _inflight
+def _release_provider_slot(cache_key: tuple) -> None:
     with _spend_lock:
-        _inflight = max(0, _inflight - 1)
-
-
-_data_version_cache: Optional[str] = None
-
-
-def explanation_data_version() -> str:
-    """Fingerprint of the verified data (manifest file hashes and periods) for cache keys."""
-    global _data_version_cache
-    if _data_version_cache is None:
-        try:
-            manifest = json.loads(data_contract.MANIFEST_JSON.read_text())
-            parts = {
-                "files": {k: v.get("sha256") for k, v in sorted(manifest.get("files", {}).items())},
-                "history": manifest.get("history"),
-                "projected": manifest.get("projected_financial_years"),
-            }
-            _data_version_cache = json.dumps(parts, sort_keys=True)
-        except (OSError, ValueError, AttributeError):
-            _data_version_cache = "unversioned"
-    return _data_version_cache
+        _inflight_keys.remove(cache_key)
 
 
 def openai_explanation(
-    mode, record, source: str = "mock", lead: Optional[int] = None, record_id=None,
-    client_id: str = "unknown",
+    mode: str, record, *, source: str, source_version: str, lead: Optional[int],
+    record_id: str, client_id: str,
 ):
     if not live_explanations_enabled():
         return None
 
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    cache_key = (
-        (mode, record_id, source, lead, model, explanation_data_version())
-        if record_id is not None else None
-    )
-    if cache_key is not None:
-        cached = _explanation_cache_get(cache_key)
-        if cached is not None:
-            return cached
+    cache_key = (mode, record_id, source, lead, model, source_version)
+    cached = _explanation_cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         from openai import OpenAI
@@ -733,11 +826,11 @@ def openai_explanation(
         "(3) the single most impactful intervention. One sentence each. No incident predictions."
     )
 
-    if not _acquire_provider_slot(client_id):
-        return None
+    if not _acquire_provider_slot(client_id, cache_key):
+        return _explanation_cache_get(cache_key)
 
     try:
-        client = OpenAI(timeout=15.0)
+        client = OpenAI(timeout=15.0, max_retries=0)
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -748,13 +841,13 @@ def openai_explanation(
             max_tokens=160,
         )
         text = response.choices[0].message.content
-        if text and cache_key is not None:
+        if text:
             _explanation_cache_put(cache_key, text)
         return text
     except Exception:
         return None
     finally:
-        _release_provider_slot()
+        _release_provider_slot(cache_key)
 
 
 @app.get("/")
@@ -856,15 +949,38 @@ def modes():
 
 
 @app.get("/api/strategic/wards")
-def list_strategic_wards():
-    return [ward_summary(feature) for feature in wards_geojson.get("features", [])]
+def list_strategic_wards(source: str = "mock"):
+    resolved = resolve_source(source, list(wards_by_id))
+    if resolved["data_source"] == "mock":
+        return [{**ward_summary(feature), **resolved} for feature in wards_geojson.get("features", [])]
+    summaries = []
+    for feature in wards_geojson.get("features", []):
+        props = ward_with_prediction(feature, use_model=True)["properties"]
+        summaries.append({
+            "id": props["id"],
+            "name": props["name"],
+            "mode": "ward",
+            "ward_id": props["id"],
+            "ward_name": props["name"],
+            "risk_score": props["risk_score"],
+            "risk_band": props["risk_band"],
+            "drivers": props["drivers"],
+            "score_method": props["score_method"],
+            "score_method_note": props["score_method_note"],
+            "zone_count": props["zone_count"],
+            "prediction": props["prediction"],
+            **resolved,
+        })
+    return summaries
 
 
 @app.get("/api/strategic/wards.geojson")
 def get_strategic_wards_geojson(source: str = "mock"):
-    use_model = source == "model" and bool(decile_to_model_score)
+    resolved = resolve_source(source, list(wards_by_id))
+    use_model = resolved["data_source"] == "model"
     return {
         **wards_geojson,
+        **resolved,
         "features": [
             ward_with_prediction(feature, use_model=use_model)
             for feature in wards_geojson.get("features", [])
@@ -877,8 +993,10 @@ def get_strategic_ward(ward_id: str, source: str = "mock"):
     ward = wards_by_id.get(ward_id)
     if ward is None:
         raise HTTPException(status_code=404, detail="Ward not found")
-    use_model = source == "model" and bool(decile_to_model_score)
-    return ward_with_prediction(ward, use_model=use_model)
+    resolved = resolve_source(source, [ward_id])
+    result = ward_with_prediction(ward, use_model=resolved["data_source"] == "model")
+    result["properties"]["source_version"] = resolved["source_version"]
+    return result
 
 
 @app.get("/api/premises")
@@ -908,19 +1026,29 @@ def explain(
     request: Request,
     mode: str,
     record_id: str = Query(..., alias="id"),
-    source: str = "mock",
+    source: Optional[str] = None,
     lead: Optional[int] = Query(None, ge=0),
 ):
+    if source is None:
+        source = "model" if mode == "zone" else "mock"
+
+    provider_lead = None
+    can_use_provider = True
     if mode == "ward":
         record = wards_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Ward not found")
-        fallback = (
-            fallback_ward_explanation_model(record, 1 if lead is None else lead)
-            if source == "model"
-            else fallback_ward_explanation(record, 6 if lead is None else lead)
-        )
+        provider_lead = lead if lead is not None else (1 if source == "model" else 6)
+        resolved = resolve_source(source, [record_id], lead=provider_lead)
+        if resolved["data_source"] == "model":
+            fallback = fallback_ward_explanation_model(record, provider_lead)
+        else:
+            fallback = fallback_ward_explanation(record, provider_lead)
+            can_use_provider = (
+                provider_lead == 0 or selected_projection(prediction_for(record), provider_lead) is not None
+            )
     elif mode == "zone":
+        resolved = resolve_source(source, mode=mode)
         record = zones_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Zone not found")
@@ -929,18 +1057,23 @@ def explain(
         record = premises_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Premises not found")
+        resolved = resolve_source(source, mode=mode)
         fallback = fallback_premises_explanation(record)
     else:
         raise HTTPException(status_code=400, detail="Mode must be 'ward', 'zone', or 'premises'")
 
-    client_id = request.client.host if request.client else "unknown"
-    live_text = openai_explanation(
-        mode, record, source=source, lead=lead, record_id=record_id, client_id=client_id
+    live_text = (
+        openai_explanation(
+            mode, record, source=resolved["data_source"], source_version=resolved["source_version"],
+            lead=provider_lead, record_id=record_id,
+            client_id=request.client.host if request.client else "unknown",
+        )
+        if can_use_provider else None
     )
     return {
         "id": record_id,
         "mode": mode,
-        "data_source": source,
+        **resolved,
         "source": "live" if live_text else "fallback",
         "text": live_text or fallback,
     }

@@ -1,24 +1,6 @@
-"""
-FireSight — Data Pipeline Runner
-=================================
-Computes 5-component DataZone risk scores and ward-level fire forecasts.
+"""Generate DataZone vulnerability scores and ward-level fire forecasts."""
 
-Fetch the raw data first (see README), then:
-    python data-pipeline/run_model.py
-
-Outputs
--------
-  output/glasgowzones.csv          — 746 Glasgow DataZones with risk scores
-  output/glasgow_ward_forecasts.csv — 23 Glasgow wards with real fire forecasts
-
-Data sources used
------------------
-  raw/simd2020.csv               — SIMD 2020 decile per DataZone  (REQUIRED)
-  raw/simd2020_indicators.xlsx   — Full SIMD indicators per DataZone (REQUIRED)
-  raw/fire_statistics_scotland.csv — Dwelling fire counts per ward 2009-2023 (REQUIRED)
-"""
-
-import sys
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -26,220 +8,139 @@ import pandas as pd
 
 from ward_forecasts import load_ward_projections
 
-HERE   = Path(__file__).resolve().parent
-RAW    = HERE / "raw"
+HERE = Path(__file__).resolve().parent
+RAW = HERE / "raw"
 OUTPUT = HERE / "output"
-OUTPUT.mkdir(exist_ok=True)
+GLASGOW_CA = "S12000049"
 
-GLASGOW_CA   = "S12000049"
-
-# ---------------------------------------------------------------------------
-# Risk score weights — 5 real components, all from official SIMD data
-# ---------------------------------------------------------------------------
 RISK_WEIGHTS = {
-    "simddecile_inv":    0.25,   # area deprivation (SIMD 2020 decile, inverted)
-    "overcrowded_rate":  0.20,   # housing overcrowding rate (SIMD indicators)
-    "cif_rate":          0.20,   # comparative illness factor per 1 000 pop (health vulnerability)
-    "nocentralheat_rate": 0.20,  # no central heating rate (housing condition)
-    "crime_rate_norm":   0.15,   # crime rate per 10 000 pop (disorder / arson proxy)
+    "simddecile_inv": 0.25,
+    "overcrowded_rate": 0.20,
+    "cif_ratio": 0.20,
+    "nocentralheat_rate": 0.20,
+    "crime_rate_norm": 0.15,
 }
 
 DRIVER_LABELS = {
-    "simddecile_inv":     "High area deprivation",
-    "overcrowded_rate":   "High housing overcrowding",
-    "cif_rate":           "High proportion of health-vulnerable residents",
+    "simddecile_inv": "High area deprivation",
+    "overcrowded_rate": "High housing overcrowding",
+    "cif_ratio": "High comparative illness factor",
     "nocentralheat_rate": "Poor housing condition (no central heating)",
-    "crime_rate_norm":    "Elevated crime rate",
+    "crime_rate_norm": "Elevated crime rate",
 }
 
-# ---------------------------------------------------------------------------
-# 1. Load SIMD 2020 — DataZone → decile
-# ---------------------------------------------------------------------------
-print("Loading SIMD 2020 ...")
-simd_raw = pd.read_csv(RAW / "simd2020.csv")
-simd_gla = simd_raw[simd_raw["CA"] == GLASGOW_CA].copy()
-simd_clean = simd_gla[["DataZone", "IntZone", "SIMD2020V2CountryDecile"]].copy()
-simd_clean.columns = ["zoneid", "zonename", "simddecile"]
-GLASGOW_ZONES = set(simd_clean["zoneid"])
-print(f"  Glasgow DataZones: {len(GLASGOW_ZONES)}")
-
-# ---------------------------------------------------------------------------
-# 2. Load SIMD 2020 Indicators — housing, health, crime
-# ---------------------------------------------------------------------------
-print("Loading SIMD 2020 indicators ...")
-try:
-    ind_df = pd.read_excel(RAW / "simd2020_indicators.xlsx", sheet_name="Data")
-except ImportError:
-    sys.exit("ERROR: openpyxl is required — run: pip install openpyxl")
-
-ind_gla = ind_df[ind_df["Council_area"] == "Glasgow City"].copy()
-
-# Normalise CIF to per-1 000 population
-ind_gla = ind_gla.copy()
-ind_gla["cif_rate"] = (
-    ind_gla["CIF"] / ind_gla["Total_population"].replace(0, np.nan) * 1000
-)
-
-indicators = ind_gla[[
-    "Data_Zone", "Total_population", "overcrowded_rate",
-    "nocentralheat_rate", "crime_rate", "cif_rate"
-]].copy()
-indicators.columns = [
-    "zoneid", "population", "overcrowded_rate",
-    "nocentralheat_rate", "crime_rate", "cif_rate"
+ZONE_OUTPUT_COLUMNS = [
+    "zoneid", "zonename", "simddecile", "riskscore", "drivers",
+    "population", "overcrowded_rate", "nocentralheat_rate",
+    "cif_ratio", "crime_rate_norm", "n_score_components",
 ]
 
-# crime_rate is per 10 000 pop; rename to make units explicit
-# We'll normalise it with the same percentile-clip approach as other components
-indicators = indicators.rename(columns={"crime_rate": "crime_rate_norm"})
+# Historical column names retained in the DataZone CSV. Forecasts exist at
+# ward level, so these columns have no DataZone values.
+LEGACY_FORECAST_COLUMNS = [
+    "forecast6mo", "forecastlower", "forecastupper", "forecast12mo",
+    "forecast18mo", "trendpct", "seasonalitywinterpct",
+]
 
-print(f"  Indicator zones: {len(indicators)}  nulls: {indicators.isnull().sum().sum()}")
 
-# ---------------------------------------------------------------------------
-# 3. Build feature table
-# ---------------------------------------------------------------------------
-print("Building feature table ...")
-features = simd_clean.copy()
-features["simddecile_inv"] = 11 - features["simddecile"]
-
-features = features.merge(indicators, on="zoneid", how="left")
-
-print(f"  Features shape: {features.shape}")
-print("  Null counts per component:")
-for col in RISK_WEIGHTS:
-    print(f"    {col}: {features[col].isnull().sum()}")
-
-# ---------------------------------------------------------------------------
-# 4. Normalise components (percentile clip → min-max → [0, 1])
-# ---------------------------------------------------------------------------
 def normalise_component(series: pd.Series) -> pd.Series:
+    """Clip to the 2nd and 98th percentiles, then scale to [0, 1]."""
     series = pd.to_numeric(series, errors="coerce")
     valid = series.dropna()
-    if len(valid) == 0:
+    if valid.empty:
         return series
-    lo = float(valid.quantile(0.02))
-    hi = float(valid.quantile(0.98))
+    lo, hi = valid.quantile([0.02, 0.98])
     if hi == lo:
         return series.where(series.isna(), 0.5)
     return (series.clip(lo, hi) - lo) / (hi - lo)
 
-for col in RISK_WEIGHTS:
-    features[f"{col}_norm"] = normalise_component(features[col])
 
-# ---------------------------------------------------------------------------
-# 5. Weighted risk score
-# ---------------------------------------------------------------------------
-print("Computing risk scores ...")
-
-def compute_riskscore(row):
-    total_w = total_s = n = 0.0
-    for col, w in RISK_WEIGHTS.items():
-        val = row.get(f"{col}_norm", np.nan)
-        if pd.notna(val):
-            total_w += w
-            total_s += w * val
+def compute_riskscore(row: pd.Series) -> pd.Series:
+    total_w = total_s = n = 0
+    for col, weight in RISK_WEIGHTS.items():
+        value = row[f"{col}_norm"]
+        if pd.notna(value):
+            total_w += weight
+            total_s += weight * value
             n += 1
     if total_w == 0:
         return pd.Series({"riskscore": np.nan, "n_score_components": 0})
-    return pd.Series({"riskscore": int(round(total_s / total_w * 100)),
-                      "n_score_components": int(n)})
+    return pd.Series({
+        "riskscore": int(round(total_s / total_w * 100)),
+        "n_score_components": n,
+    })
 
-score_result = features.apply(compute_riskscore, axis=1)
-features["riskscore"]          = score_result["riskscore"]
-features["n_score_components"] = score_result["n_score_components"]
 
-n_scored = features["riskscore"].notna().sum()
-print(f"  Zones scored: {n_scored}/746")
-print(f"  Components per zone (mode): {int(features['n_score_components'].mode().iloc[0])}/5")
-print(f"  Score range: {features['riskscore'].min():.0f} – {features['riskscore'].max():.0f}")
-print(f"  Score mean:  {features['riskscore'].mean():.1f}")
-
-# ---------------------------------------------------------------------------
-# 6. Drivers — top 3 contributing components
-# ---------------------------------------------------------------------------
-def extract_drivers(row):
+def extract_drivers(row: pd.Series) -> list[str] | None:
     contributions = {
-        col: row.get(f"{col}_norm", np.nan) * w
-        for col, w in RISK_WEIGHTS.items()
-        if pd.notna(row.get(f"{col}_norm", np.nan))
+        col: row[f"{col}_norm"] * weight
+        for col, weight in RISK_WEIGHTS.items()
+        if pd.notna(row[f"{col}_norm"])
     }
     if not contributions:
         return None
-    top3 = sorted(contributions, key=contributions.get, reverse=True)[:3]
-    return [DRIVER_LABELS[c] for c in top3]
+    top_three = sorted(contributions, key=contributions.get, reverse=True)[:3]
+    return [DRIVER_LABELS[col] for col in top_three]
 
-features["drivers"] = features.apply(extract_drivers, axis=1)
-print(f"  Zones with drivers: {features['drivers'].notna().sum()}/746")
 
-# ---------------------------------------------------------------------------
-# 7. Ward-level fire forecasts from fire_statistics_scotland.csv
-# ---------------------------------------------------------------------------
-print("\nBuilding ward-level fire forecasts ...")
+def build_zones(simd: pd.DataFrame, indicators: pd.DataFrame) -> pd.DataFrame:
+    features = simd.loc[simd["CA"].eq(GLASGOW_CA), [
+        "DataZone", "IntZone", "SIMD2020V2CountryDecile",
+    ]].rename(columns={
+        "DataZone": "zoneid", "IntZone": "zonename",
+        "SIMD2020V2CountryDecile": "simddecile",
+    })
+    glasgow_indicators = indicators.loc[indicators["Council_area"].eq("Glasgow City"), [
+        "Data_Zone", "Total_population", "overcrowded_rate",
+        "nocentralheat_rate", "crime_rate", "CIF",
+    ]].rename(columns={
+        "Data_Zone": "zoneid", "Total_population": "population",
+        "crime_rate": "crime_rate_norm", "CIF": "cif_ratio",
+    })
+    # SIMD publishes an indirectly standardised observed-to-expected ratio
+    # already. Keep its published scale and treat suppression markers as missing.
+    glasgow_indicators["cif_ratio"] = pd.to_numeric(glasgow_indicators["cif_ratio"], errors="coerce")
+    features = features.merge(glasgow_indicators, on="zoneid", how="left", validate="one_to_one")
+    features["simddecile_inv"] = 11 - features["simddecile"]
+    for col in RISK_WEIGHTS:
+        features[f"{col}_norm"] = normalise_component(features[col])
 
-ward_forecasts_df = load_ward_projections(RAW / "fire_statistics_scotland.csv")
-print(f"  Wards forecast: {len(ward_forecasts_df)}")
-print(f"  Data quality breakdown:\n{ward_forecasts_df['data_quality'].value_counts().to_string()}")
+    features[["riskscore", "n_score_components"]] = features.apply(compute_riskscore, axis=1)
+    features["drivers"] = features.apply(extract_drivers, axis=1)
+    zones = features[ZONE_OUTPUT_COLUMNS].copy()
+    zones["riskrank"] = zones["riskscore"].rank(ascending=False, method="min").astype("Int64")
+    zones["data_quality"] = zones["n_score_components"].apply(
+        lambda count: "sufficient" if count == 5 else ("limited" if count >= 3 else "insufficient")
+    )
+    for col in LEGACY_FORECAST_COLUMNS:
+        zones[col] = np.nan
+    return zones
 
-# ---------------------------------------------------------------------------
-# 8. Assemble zones output
-# ---------------------------------------------------------------------------
-print("\nAssembling final output ...")
 
-SCHEMA_COLS = [
-    "zoneid", "zonename", "riskscore", "drivers",
-    "population", "overcrowded_rate", "nocentralheat_rate",
-    "cif_rate", "crime_rate_norm", "simddecile",
-    # forecast columns — NaN at DataZone level (ward-level forecasts stored separately)
-    "riskrank", "n_score_components", "data_quality",
-]
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--zones-only", action="store_true", help="keep the existing ward forecasts")
+    args = parser.parse_args()
 
-zones = features[[
-    "zoneid", "zonename", "simddecile", "riskscore", "drivers",
-    "population", "overcrowded_rate", "nocentralheat_rate",
-    "cif_rate", "crime_rate_norm", "n_score_components",
-]].copy()
+    simd = pd.read_csv(RAW / "simd2020.csv")
+    try:
+        indicators = pd.read_excel(RAW / "simd2020_indicators.xlsx", sheet_name="Data")
+    except ImportError as exc:
+        parser.exit(1, f"Unable to read SIMD indicators. Install data-pipeline/requirements.txt: {exc}\n")
+    zones = build_zones(simd, indicators)
+    ward_forecasts = None if args.zones_only else load_ward_projections(RAW / "fire_statistics_scotland.csv")
 
-zones["riskrank"]     = zones["riskscore"].rank(ascending=False, method="min").astype("Int64")
-zones["data_quality"] = zones["n_score_components"].apply(
-    lambda n: "sufficient" if n == 5 else ("limited" if n >= 3 else "insufficient")
-)
+    OUTPUT.mkdir(exist_ok=True)
+    zones_path = OUTPUT / "glasgowzones.csv"
+    zones.to_csv(zones_path, index=False)
+    print(f"Saved {len(zones)} DataZones to {zones_path}")
+    print(f"Missing CIF ratios: {zones['cif_ratio'].isna().sum()}")
+    print(f"Data quality breakdown:\n{zones['data_quality'].value_counts().to_string()}")
+    if ward_forecasts is not None:
+        wards_path = OUTPUT / "glasgow_ward_forecasts.csv"
+        ward_forecasts.to_csv(wards_path, index=False)
+        print(f"Saved {len(ward_forecasts)} ward forecasts to {wards_path}")
 
-# Forecast columns kept as NaN — DataZone forecasts need per-zone incident data
-for col in ["forecast6mo", "forecastlower", "forecastupper",
-            "forecast12mo", "forecast18mo", "trendpct", "seasonalitywinterpct"]:
-    zones[col] = np.nan
 
-# ---------------------------------------------------------------------------
-# 9. Export
-# ---------------------------------------------------------------------------
-zones_path = OUTPUT / "glasgowzones.csv"
-zones.to_csv(zones_path, index=False)
-print(f"\nSaved {len(zones)} zones  ->  {zones_path.resolve()}")
-
-wf_path = OUTPUT / "glasgow_ward_forecasts.csv"
-ward_forecasts_df.to_csv(wf_path, index=False)
-print(f"Saved {len(ward_forecasts_df)} ward forecasts  ->  {wf_path.resolve()}")
-
-# ---------------------------------------------------------------------------
-# Summary report
-# ---------------------------------------------------------------------------
-print("\n" + "=" * 60)
-print("FIRESIGHT MODEL RUN COMPLETE")
-print("=" * 60)
-print(f"  DataZones scored:       {n_scored}/746")
-print(f"  Components per zone:    {int(features['n_score_components'].mode().iloc[0])}/5")
-print(f"  Data quality (5/5):     {(zones['data_quality']=='sufficient').sum()}/746")
-print(f"  Ward forecasts:         {len(ward_forecasts_df)}/23")
-print(f"  Score range:            {zones['riskscore'].min()}-{zones['riskscore'].max()}")
-print(f"  Score mean:             {zones['riskscore'].mean():.1f}")
-print(f"  Score std dev:          {zones['riskscore'].std():.1f}")
-print()
-print("Top 10 highest-risk DataZones:")
-top10 = zones.nsmallest(10, "riskrank")[["zoneid", "zonename", "riskscore", "riskrank"]]
-print(top10.to_string(index=False))
-print()
-print("Ward forecast sample (top 5 by forecast_1yr):")
-wf_top = ward_forecasts_df.nlargest(5, "forecast_1yr")[
-    ["ward_name", "forecast_1yr", "trend_pct", "data_quality"]
-]
-print(wf_top.to_string(index=False))
+if __name__ == "__main__":
+    main()
