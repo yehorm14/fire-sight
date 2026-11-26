@@ -49,6 +49,8 @@ const TIMEFRAME_TO_MONTHS = {
 };
 
 const normalizeEvent = (event, idx) => {
+  if (event === null || typeof event !== 'object' || Array.isArray(event)) return null;
+
   const lat = Number(event.lat ?? event.latitude ?? event.coordinates?.lat);
   const lng = Number(event.lng ?? event.longitude ?? event.coordinates?.lng);
   const date = event.date ?? event.eventDate ?? event.startDate;
@@ -99,7 +101,7 @@ const EventLayer = ({ timeFrame }) => {
         }
 
         const payload = await response.json();
-        const rawEvents = Array.isArray(payload) ? payload : payload.events;
+        const rawEvents = Array.isArray(payload) ? payload : payload?.events;
         if (!Array.isArray(rawEvents)) {
           throw new Error('Unexpected events payload');
         }

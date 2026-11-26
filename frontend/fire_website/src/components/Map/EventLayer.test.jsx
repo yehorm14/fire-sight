@@ -86,6 +86,15 @@ describe('EventLayer feed states', () => {
     expect(screen.queryAllByTestId('marker')).toHaveLength(0)
   })
 
+  it('keeps valid events when the feed also contains invalid rows', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      ok({ events: [null, ev('bad', '2026-02-31T12:00:00Z'), ev('good', dayOffset(1))] })))
+    render(<EventLayer timeFrame="Current" />)
+    expect(await screen.findByText('Event good')).toBeInTheDocument()
+    expect(screen.queryAllByTestId('marker')).toHaveLength(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('shows no events and no error when no feed is configured', () => {
     cfg.EVENTS_API_URL = ''
     const fetchMock = vi.fn()

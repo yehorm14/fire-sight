@@ -6,32 +6,32 @@
 // it starts. The window runs from "now" to the end of the local calendar day that is N calendar
 // months ahead (day clamped at month end, so 31 Jan + 1 month is 28/29 Feb, not 3 March).
 
-const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const ISO_DATE_TIME = /^(\d{4}-\d{2}-(\d{2}))(T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)?)?$/;
 
 const parseOne = (value, isEnd) => {
   if (typeof value !== 'string') return null;
-  const match = DATE_ONLY.exec(value.trim());
-  if (match) {
-    const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
-    const check = new Date(y, m - 1, d);
-    // Reject rollovers such as 2026-02-31.
-    if (check.getFullYear() !== y || check.getMonth() !== m - 1 || check.getDate() !== d) {
-      return null;
-    }
-    // A date-only end is exclusive: the start of the following local day.
-    return isEnd
-      ? { date: new Date(y, m - 1, d + 1), exclusive: true }
-      : { date: check, exclusive: false };
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : { date, exclusive: false };
+  const match = ISO_DATE_TIME.exec(value.trim());
+  if (!match) return null;
+
+  const [dateTime, calendarDate, day, time] = match;
+  // Check the calendar date before any offset or local-time conversion.
+  const calendar = new Date(`${calendarDate}T00:00:00Z`);
+  if (calendar.getUTCDate() !== Number(day)) return null;
+
+  const date = new Date(time ? dateTime : `${calendarDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  // A date-only end is exclusive: the start of the following local day.
+  const exclusive = !time && isEnd;
+  if (exclusive) date.setDate(date.getDate() + 1);
+  return { date, exclusive };
 };
 
 /** Parse feed dates into { start, end, endExclusive } (Dates), or null if invalid. */
 export const parseEventRange = (startValue, endValue) => {
   const start = parseOne(startValue, false);
   if (!start) return null;
-  const end = parseOne(endValue || startValue, true);
+  const end = parseOne(endValue ?? startValue, true);
   if (!end || (end.exclusive ? end.date <= start.date : end.date < start.date)) return null;
   return { start: start.date, end: end.date, endExclusive: end.exclusive };
 };

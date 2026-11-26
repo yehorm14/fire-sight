@@ -13,6 +13,12 @@
 
 Copy `backend/.env.example` to `backend/.env` and `frontend/fire_website/.env.example` to `.env.local`.
 
+## Event feed format
+
+The feed returns a JSON array or an object containing an `events` array. An invalid response shape shows an error with retry. Individual invalid entries are skipped so valid events in the same response still appear.
+
+Use `YYYY-MM-DD` for a whole calendar day in the viewer's local time or an ISO timestamp such as `2026-11-26T18:00:00Z` for a timed event. A timestamp without an offset uses the viewer's local time. An optional `endDate` gives a range. A date-only end includes the entire final calendar day.
+
 ## Backend on Render
 
 `render.yaml` defines the service. Set `CORS_ORIGINS` to your frontend URL, for example `https://<your-frontend-host>` (the exact origin, no trailing slash). If it is unset, the API only accepts requests from localhost, the browser blocks the deployed frontend, and the API logs a startup warning.
