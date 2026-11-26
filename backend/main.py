@@ -180,15 +180,13 @@ SAMPLE_WARD_PROPS = (
 )
 
 
-def ward_model_score(props) -> int:
-    """Model score for a ward: geographic aggregate if mapped, else the SIMD-decile proxy."""
+def ward_model_score(props) -> Optional[int]:
+    """Geographic aggregate or documented decile proxy, when either is available."""
     agg = ward_aggregates["wards"].get(props["ward_id"])
     if agg is not None:
         return agg["risk_score"]
     decile = props.get("simd_decile")
-    if decile is not None:
-        return decile_to_model_score.get(int(decile), props["risk_score"])
-    return props["risk_score"]
+    return decile_to_model_score.get(int(decile)) if decile is not None else None
 
 
 def ward_model_provenance(props) -> Dict[str, Any]:
@@ -375,33 +373,57 @@ SOURCES = ("mock", "model")
 
 
 def model_source_version() -> Optional[str]:
-    """Short content hash of the loaded model CSVs, so clients can tell which data produced a result."""
+    """Fingerprint the model inputs once, alongside loading them at startup."""
+    paths = [ZONES_CSV]
+    if ward_forecasts:
+        paths.append(WARD_FORECASTS_CSV)
+    if wards_by_id:
+        paths.append(WARDS_FILE)
+    if ward_lookup is not None:
+        paths.append(DATAZONE_WARD_LOOKUP_CSV)
     try:
         digest = hashlib.sha256()
-        for path in (WARD_FORECASTS_CSV, ZONES_CSV):
+        for path in paths:
             digest.update(data_contract.sha256_of(path).encode())
         return digest.hexdigest()[:12]
     except OSError:
         return None
 
 
+MODEL_SOURCE_VERSION = model_source_version()
+
+
 def model_unavailable_reasons(ward_ids: Optional[List[str]] = None) -> List[str]:
-    """Why model results cannot be served right now (empty when they can)."""
+    """Why the requested model result cannot be served right now."""
     reasons = []
     if not zones:
         reasons.append("DataZone scores are not loaded")
-    if not decile_to_model_score:
+    elif MODEL_SOURCE_VERSION is None:
+        reasons.append("model source version is unavailable")
+    if ward_ids is None:
+        return reasons
+
+    if not decile_to_model_score and not ward_aggregates["wards"]:
         reasons.append("model score lookup is empty")
+    else:
+        missing_scores = sorted(
+            ward_id for ward_id in ward_ids
+            if ward_model_score(wards_by_id[ward_id]["properties"]) is None
+        )
+        if missing_scores:
+            reasons.append(f"no model score for: {', '.join(missing_scores)}")
     if not ward_forecasts:
         reasons.append("ward forecasts are not loaded")
-    elif ward_ids is not None:
-        missing = sorted(w for w in ward_ids if w not in ward_forecasts)
-        if missing:
-            reasons.append(f"no ward forecast for: {', '.join(missing)}")
+    else:
+        missing_forecasts = sorted(ward_id for ward_id in ward_ids if ward_id not in ward_forecasts)
+        if missing_forecasts:
+            reasons.append(f"no ward forecast for: {', '.join(missing_forecasts)}")
     return reasons
 
 
-def resolve_source(source: str, ward_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+def resolve_source(
+    source: str, ward_ids: Optional[List[str]] = None, *, mode: Optional[str] = None
+) -> Dict[str, Any]:
     """Single place that validates ?source= for every endpoint.
 
     Returns {"data_source", "source_version"}. Unknown sources are 400; model requests
@@ -410,8 +432,13 @@ def resolve_source(source: str, ward_ids: Optional[List[str]] = None) -> Dict[st
     if source not in SOURCES:
         raise HTTPException(status_code=400, detail=f"source must be one of: {', '.join(SOURCES)}")
     if source == "mock":
+        if mode == "zone":
+            raise HTTPException(status_code=400, detail="DataZone explanations use model data.")
         return {"data_source": "mock", "source_version": "sample"}
-    reasons = model_unavailable_reasons(ward_ids)
+    reasons = (
+        ["premises are available as sample data only"]
+        if mode == "premises" else model_unavailable_reasons(ward_ids)
+    )
     if reasons:
         raise HTTPException(
             status_code=503,
@@ -421,7 +448,7 @@ def resolve_source(source: str, ward_ids: Optional[List[str]] = None) -> Dict[st
                 "reasons": reasons,
             },
         )
-    return {"data_source": "model", "source_version": model_source_version()}
+    return {"data_source": "model", "source_version": MODEL_SOURCE_VERSION}
 
 
 def ward_with_prediction(feature, use_model: bool = False):
@@ -827,6 +854,9 @@ def list_strategic_wards(source: str = "mock"):
             "risk_score": props["risk_score"],
             "risk_band": props["risk_band"],
             "drivers": props["drivers"],
+            "score_method": props["score_method"],
+            "score_method_note": props["score_method_note"],
+            "zone_count": props["zone_count"],
             "prediction": props["prediction"],
             **resolved,
         })
@@ -884,22 +914,23 @@ def get_premises(premises_id: str):
 def explain(
     mode: str,
     record_id: str = Query(..., alias="id"),
-    source: str = "mock",
+    source: Optional[str] = None,
     lead: Optional[int] = Query(None, ge=0),
 ):
-    if mode not in ("ward", "zone", "premises"):
-        raise HTTPException(status_code=400, detail="Mode must be 'ward', 'zone', or 'premises'")
-    resolved = resolve_source(source, [record_id] if mode == "ward" and record_id in wards_by_id else None)
+    if source is None:
+        source = "model" if mode == "zone" else "mock"
     if mode == "ward":
         record = wards_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Ward not found")
+        resolved = resolve_source(source, [record_id])
         fallback = (
             fallback_ward_explanation_model(record, 1 if lead is None else lead)
             if resolved["data_source"] == "model"
             else fallback_ward_explanation(record, 6 if lead is None else lead)
         )
     elif mode == "zone":
+        resolved = resolve_source(source, mode=mode)
         record = zones_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Zone not found")
@@ -908,6 +939,7 @@ def explain(
         record = premises_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Premises not found")
+        resolved = resolve_source(source, mode=mode)
         fallback = fallback_premises_explanation(record)
     else:
         raise HTTPException(status_code=400, detail="Mode must be 'ward', 'zone', or 'premises'")

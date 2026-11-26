@@ -286,6 +286,7 @@ def test_model_unavailable_is_503_never_sample_data(client, monkeypatch):
     import main
 
     monkeypatch.setattr(main, "decile_to_model_score", {})
+    monkeypatch.setattr(main, "ward_aggregates", {"wards": {}})
     for url, extra in _all_source_urls():
         res = client.get(url, params={**extra, "source": "model"})
         assert res.status_code == 503, url
@@ -324,5 +325,46 @@ def test_sources_agree_across_list_geojson_detail_and_explain(client):
     explain = client.get("/api/explain", params={"mode": "ward", "id": GOVAN, "source": "model"}).json()
     by_id = {f["properties"]["id"]: f["properties"] for f in geo["features"]}
     assert listed[GOVAN]["risk_score"] == by_id[GOVAN]["risk_score"] == detail["risk_score"]
+    assert listed[GOVAN]["score_method"] == by_id[GOVAN]["score_method"] == detail["score_method"]
     assert listed[GOVAN]["data_source"] == explain["data_source"] == geo["data_source"] == "model"
     assert listed[GOVAN]["source_version"] == explain["source_version"] == geo["source_version"] == detail["source_version"]
+
+
+def test_missing_ward_score_does_not_fall_back_to_sample(client, monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "ward_aggregates", {"wards": {}})
+    ward_decile = main.wards_by_id[GOVAN]["properties"]["simd_decile"]
+    remaining = {
+        decile: score for decile, score in main.decile_to_model_score.items()
+        if decile != ward_decile
+    }
+    assert remaining
+    monkeypatch.setattr(main, "decile_to_model_score", remaining)
+
+    for url, extra in _all_source_urls():
+        model = client.get(url, params={**extra, "source": "model"})
+        assert model.status_code == 503, url
+        detail = model.json()["detail"]
+        assert detail["error"] == "model_unavailable"
+        assert detail["reasons"][0].startswith("no model score for: ")
+        assert GOVAN in detail["reasons"][0]
+        assert client.get(url, params={**extra, "source": "mock"}).status_code == 200, url
+
+
+def test_explain_reports_the_source_that_supplies_the_record(client):
+    premises = {"mode": "premises", "id": "P001"}
+    response = client.get("/api/explain", params=premises)
+    assert response.status_code == 200
+    assert response.json()["data_source"] == "mock"
+    response = client.get("/api/explain", params={**premises, "source": "model"})
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "model_unavailable"
+
+    zone = client.get("/api/zones/top", params={"n": 1}).json()[0]
+    zone_params = {"mode": "zone", "id": zone["zoneid"]}
+    response = client.get("/api/explain", params=zone_params)
+    assert response.status_code == 200
+    assert response.json()["data_source"] == "model"
+    assert response.json()["source_version"]
+    assert client.get("/api/explain", params={**zone_params, "source": "mock"}).status_code == 400
