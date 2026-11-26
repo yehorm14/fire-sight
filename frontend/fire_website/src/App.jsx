@@ -3,6 +3,7 @@ import './App.css';
 import RiskMap from './components/Map/RiskMap';
 import TopRiskAreas from './components/Dashboard/TopRiskAreas';
 import { BACKEND_URL } from './config';
+import { useApiResource } from './useApiResource';
 
 const SAMPLE_PERIODS = [
   { lead: 6, label: 'Sample months 1–6', overlay: 'In 6 months' },
@@ -15,6 +16,14 @@ function App() {
   const [dataSource, setDataSource] = useState('mock');
   const [modelStatus, setModelStatus] = useState(null);
   const [showPremises, setShowPremises] = useState(true);
+  const [selectedWardId, setSelectedWardId] = useState('');
+  const wardLoad = useApiResource(
+    '/api/strategic/wards.geojson?source=' + dataSource,
+    'Could not load Glasgow wards.',
+  );
+  const wardResult = wardLoad.status === 'ready' && !Array.isArray(wardLoad.data?.features)
+    ? { ...wardLoad, data: null, status: 'error', error: 'Could not read Glasgow ward data.' }
+    : wardLoad;
   const [nightMode, setNightMode] = useState(() => {
     try {
       const stored = window.localStorage.getItem('fireSightNightMode');
@@ -79,7 +88,7 @@ function App() {
           </div>
           <div className="app-header-text">
             <h1>FireSight: Glasgow Risk Predictor</h1>
-            <p>Operational risk view for Glasgow regions</p>
+            <p>Explore Glasgow wards and the evidence behind their scores</p>
           </div>
         </div>
 
@@ -107,12 +116,14 @@ function App() {
               <button
                 className={`ds-btn ${dataSource === 'mock' ? 'ds-btn--active' : ''}`}
                 onClick={() => selectSource('mock')}
+                aria-pressed={dataSource === 'mock'}
               >
                 Mock
               </button>
               <button
                 className={`ds-btn ${dataSource === 'model' ? 'ds-btn--active' : ''}`}
                 onClick={() => selectSource('model')}
+                aria-pressed={dataSource === 'model'}
                 disabled={!modelLoaded}
                 title={!modelLoaded ? 'Run the data pipeline first' : 'Switch to linear model output'}
               >
@@ -128,9 +139,9 @@ function App() {
 
       <p className="source-notice" role="note">
         {dataSource === 'model'
-          ? 'Model: DataZone risk scores from SIMD 2020 indicators and linear-trend ward projections of SFRS dwelling-fire counts (annual financial years). The projections are not calibrated forecasts.'
+          ? 'Model: SIMD 2020 vulnerability scores and historical annual projections of SFRS dwelling fires. Projection ranges describe model residuals.'
           : 'Mock: illustrative sample values for demonstration, not real risk scores or forecasts.'}
-        {' '}Premises and event markers are illustrative sample data in both modes. Explanations use built-in template text unless an AI provider is configured.
+        {' '}Premises and any sample events are illustrative overlays.
       </p>
 
       <main className="app-main">
@@ -141,7 +152,7 @@ function App() {
             value={lead}
             onChange={(event) => setLead(Number(event.target.value))}
           >
-            <option value={0}>Baseline risk</option>
+            <option value={0}>Baseline score</option>
             {periods.map((period) => (
               <option key={period.lead} value={period.lead}>
                 {period.label}
@@ -156,22 +167,33 @@ function App() {
                 checked={showPremises}
                 onChange={(e) => setShowPremises(e.target.checked)}
               />
-              <span>High-risk premises</span>
+              <span>Sample premises</span>
             </label>
           </div>
         </div>
 
+        <a className="ward-skip-link" href="#ward-explorer">Skip map and explore wards</a>
         <RiskMap
           lead={lead}
           overlayTimeFrame={overlayTimeFrame}
           dataSource={dataSource}
           nightMode={nightMode}
           showPremises={showPremises}
+          geoData={wardResult.data}
+          selectedWardId={selectedWardId}
+          onSelectWard={setSelectedWardId}
         />
 
-        <div className={`top-risk-panel${nightMode ? ' night-mode' : ''}`}>
-          <TopRiskAreas key={dataSource} dataSource={dataSource} lead={lead} />
-        </div>
+        <aside id="ward-explorer" className={`top-risk-panel${nightMode ? ' night-mode' : ''}`} tabIndex={-1} aria-label="Explore Glasgow wards">
+          <TopRiskAreas
+            key={dataSource}
+            result={wardResult}
+            dataSource={dataSource}
+            lead={lead}
+            selectedWardId={selectedWardId}
+            onSelectWard={setSelectedWardId}
+          />
+        </aside>
       </main>
     </div>
   );

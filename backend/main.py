@@ -301,6 +301,19 @@ def ward_summary(feature):
     }
 
 
+def last_observed_count(row):
+    raw_history = row.get("history_annual", row.get("history_6mo"))
+    if isinstance(raw_history, str):
+        try:
+            raw_history = ast.literal_eval(raw_history)
+        except (ValueError, SyntaxError):
+            return None
+    if not isinstance(raw_history, list) or not raw_history:
+        return None
+    count = raw_history[-1]
+    return count if isinstance(count, (int, float)) and math.isfinite(count) and count >= 0 else None
+
+
 def annual_ward_prediction(row):
     """Read either regenerated annual columns or the original mislabeled annual CSV."""
     first, last, years = (row.get(key) for key in ("first_year", "last_year", "years_of_data"))
@@ -358,6 +371,7 @@ def annual_ward_prediction(row):
         "last_year": last,
         "first_financial_year": first_period,
         "last_financial_year": last_period,
+        "last_observed_count": last_observed_count(row),
         "trend_pct": row.get("trend_pct"),
         "data_quality": row.get("data_quality"),
         "note": note if projections else "Ward projection unavailable.",
@@ -997,6 +1011,36 @@ def get_strategic_ward(ward_id: str, source: str = "mock"):
     result = ward_with_prediction(ward, use_model=resolved["data_source"] == "model")
     result["properties"]["source_version"] = resolved["source_version"]
     return result
+
+
+@app.get("/api/strategic/wards/{ward_id}/zones")
+def list_ward_zones(ward_id: str):
+    """Serve scored 2011 DataZones assigned to this ward by the official lookup."""
+    if ward_id not in wards_by_id:
+        raise HTTPException(status_code=404, detail="Ward not found")
+    if ward_lookup is None:
+        raise HTTPException(status_code=503, detail="DataZone-to-ward lookup is unavailable")
+
+    resolved = resolve_source("model")
+    mapping = ward_lookup["mapping"]
+    names = ward_lookup["names"]
+    members = [
+        {
+            "datazone_id": zone["zoneid"],
+            "name": names.get(zone["zoneid"]),
+            "risk_score": zone["riskscore"],
+            "drivers": zone["drivers"],
+        }
+        for zone in zones
+        if mapping.get(zone["zoneid"]) == ward_id and zone.get("riskscore") is not None
+    ]
+    return {
+        **resolved,
+        "ward_id": ward_id,
+        "datazone_vintage": ward_lookup["datazone_vintage"],
+        "ward_vintage": ward_lookup["ward_vintage"],
+        "zones": sorted(members, key=lambda zone: (-zone["risk_score"], zone["datazone_id"])),
+    }
 
 
 @app.get("/api/premises")

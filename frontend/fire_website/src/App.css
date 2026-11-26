@@ -100,12 +100,13 @@ body, html {
 }
 
 .app-main {
-  flex-grow: 1;
+  flex: 1;
+  min-height: 0;
   position: relative;
   --right-overlay-top: 20px;
   --right-overlay-gap: 16px;
   --right-overlay-bottom: 20px;
-  --legend-reserved-height: 190px;
+  --legend-reserved-height: 220px;
 }
 
 /* ── Timeframe control — light default ── */
@@ -238,23 +239,6 @@ body, html {
     0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-@media (max-width: 720px) {
-  .app-main {
-    --right-overlay-top: 16px;
-    --right-overlay-gap: 12px;
-    --right-overlay-bottom: 12px;
-    --legend-reserved-height: 168px;
-  }
-
-  .top-risk-panel {
-    width: calc(100vw - 32px);
-    right: 16px;
-    top: auto;
-    bottom: 12px;
-    max-height: 40vh;
-  }
-}
-
 /* ── Layer toggles inside the timeframe panel ── */
 .layer-toggles {
   margin-top: 10px;
@@ -385,5 +369,83 @@ body, html {
 
   .app-header-text p {
     display: none;
+  }
+}
+
+
+.ward-skip-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1200;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff;
+  color: #172554;
+  transform: translateY(-200vh);
+}
+
+.ward-skip-link:focus {
+  transform: none;
+}
+
+@media (max-width: 720px) {
+  body, html {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .app-container {
+    width: 100%;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .app-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .app-header-controls {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+
+  .source-notice {
+    padding-inline: 14px;
+  }
+
+  .timeframe-control,
+  .top-risk-panel {
+    position: static;
+    min-width: 0;
+    width: auto;
+    margin: 12px;
+  }
+
+  .app-main > .risk-map-container {
+    height: auto;
+  }
+
+  .app-main .leaflet-container {
+    height: 360px;
+  }
+
+  .app-main .map-legend {
+    position: static;
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    margin: 12px;
+  }
+
+  .ward-skip-link:focus {
+    position: relative;
+    display: inline-block;
+    top: auto;
+    left: auto;
+    margin-inline: 12px;
   }
 }

@@ -111,3 +111,34 @@ def test_committed_lookup_covers_every_modeled_zone_and_ward(client):
         assert ward["score_method"] == "datazone_aggregate"
         assert ward["zone_count"] > 0
         assert set(main.SAMPLE_WARD_PROPS).isdisjoint(ward.keys() - {"drivers"})
+
+
+def test_ward_zone_drilldown_uses_official_membership_and_names(client, monkeypatch):
+    ward_id = "S13002967"
+    response = client.get(f"/api/strategic/wards/{ward_id}/zones")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ward_id"] == ward_id
+    assert payload["data_source"] == "model"
+    assert payload["datazone_vintage"] == "DZ2011"
+    assert payload["ward_vintage"] == "WD24"
+    members = payload["zones"]
+    assert {zone["datazone_id"] for zone in members} == {
+        zone for zone, ward in main.ward_lookup["mapping"].items() if ward == ward_id
+    }
+    assert [zone["risk_score"] for zone in members] == sorted(
+        (zone["risk_score"] for zone in members), reverse=True
+    )
+    assert all(zone["name"] and zone["name"] != zone["datazone_id"] for zone in members)
+    assert client.get("/api/strategic/wards/unknown/zones").status_code == 404
+    monkeypatch.setattr(main, "ward_lookup", None)
+    assert client.get(f"/api/strategic/wards/{ward_id}/zones").status_code == 503
+
+
+def test_ward_model_separates_last_observation_from_projection(client):
+    result = client.get("/api/strategic/wards/S13002967", params={"source": "model"})
+    assert result.status_code == 200
+    prediction = result.json()["properties"]["prediction"]
+    assert prediction["last_observed_count"] == 36
+    assert prediction["last_financial_year"] == "2022/2023"
+    assert prediction["projections"][0]["financial_year"] == "2023/2024"

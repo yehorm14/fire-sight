@@ -25,7 +25,7 @@ class LookupFormatError(ValueError):
 
 
 def load_lookup(path: Path) -> Optional[Dict[str, Any]]:
-    """Return {"mapping": {zone: ward}, "datazone_vintage", "ward_vintage"} or None if absent."""
+    """Read the ward mapping, boundary vintages and any official DataZone names."""
     if not path.exists():
         return None
     with path.open(newline="") as handle:
@@ -35,17 +35,22 @@ def load_lookup(path: Path) -> Optional[Dict[str, Any]]:
             raise LookupFormatError(f"lookup is missing columns: {sorted(missing)}")
         rows = list(reader)
     mapping: Dict[str, str] = {}
+    names: Dict[str, str] = {}
     for row in rows:
         zone = row["datazone_id"].strip()
         if zone in mapping:
             raise LookupFormatError(f"DataZone {zone} appears more than once in the lookup")
         mapping[zone] = row["ward_id"].strip()
+        name = (row.get("datazone_name") or "").strip()
+        if name:
+            names[zone] = name
     dz_vintages = {r["datazone_vintage"].strip() for r in rows}
     ward_vintages = {r["ward_vintage"].strip() for r in rows}
     if len(dz_vintages) != 1 or len(ward_vintages) != 1 or "" in dz_vintages | ward_vintages:
         raise LookupFormatError("lookup must declare exactly one DataZone vintage and one ward vintage")
     return {
         "mapping": mapping,
+        "names": names,
         "datazone_vintage": dz_vintages.pop(),
         "ward_vintage": ward_vintages.pop(),
     }
