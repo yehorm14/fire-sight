@@ -1,8 +1,8 @@
 # Data pipeline
 
-`data-pipeline/run_model.py` scores each Glasgow DataZone from five SIMD 2020 indicators (area deprivation decile, overcrowding, comparative illness factor, no central heating, crime rate) with fixed weights. It also fits a recency-weighted linear trend to yearly SFRS dwelling-fire counts for the 23 wards in `backend/data/glasgow_wards.geojson` and projects each of the first three financial years after the last observation. The committed data use 2009/2010 through 2022/2023, so the projected years are 2023/2024, 2024/2025 and 2025/2026. Each value is one financial year's dwelling-fire count. `notebook.ipynb` is an exploratory prototype with separate sample half-year logic.
+`data-pipeline/run_model.py` scores each Glasgow DataZone from five SIMD 2020 indicators (area deprivation decile, overcrowding, comparative illness factor, no central heating, crime rate) with fixed weights. It also fits a recency-weighted linear trend to yearly SFRS dwelling-fire counts for the 23 wards in `backend/data/glasgow_wards.geojson` and projects each of the first three financial years after the last observation. The committed data use 2009/2010 through 2022/2023, so the projected years are 2023/2024, 2024/2025 and 2025/2026. Each value is one financial year's dwelling-fire count. `notebook.ipynb` contains exploratory sample half-year logic and writes only to `build/exploratory/`.
 
-The processed output is committed in `data-pipeline/output/`, so the API runs without the raw data. The raw inputs are not in git (the fire statistics file is about 12 MB).
+The processed output is committed in `data-pipeline/output/`, so the API runs without the raw data. The full raw downloads stay outside git. A compact official ward observation snapshot supports offline regeneration and evaluation.
 
 ## Regenerate the output
 
@@ -24,7 +24,9 @@ python data-pipeline/run_model.py --zones-only
 python backend/data_contract.py --write-manifest
 ```
 
-To regenerate only the ward projection CSV, run `python data-pipeline/ward_forecasts.py` with the SFRS CSV in place. Each ward must have consecutive, unique financial-year observations.
+To regenerate only the ward projection CSV, run `python data-pipeline/ward_forecasts.py`. This reads the checked-in annual observations and uses the same forecast function as `run_model.py`. Use `--fire-csv PATH` to supply an official source CSV. Each ward must have consecutive, unique financial-year observations.
+
+Run `python data-pipeline/evaluate_ward_forecasts.py` for the rolling-origin comparison against last-value and three-year mean baselines. See the [forecast evaluation](FORECAST_EVALUATION.md) for the source audit, out-of-sample errors and residual range coverage.
 
 ## Review regenerated data
 
