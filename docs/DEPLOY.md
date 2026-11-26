@@ -47,7 +47,7 @@ The free Render tier sleeps when idle, so the first request can take about a min
 python scripts/smoke_check.py --api https://<api-host> --frontend https://<frontend-host>
 ```
 
-It only issues GET and OPTIONS requests and needs no credentials. It checks API liveness, that the model is loaded, 23 wards for both Model and Mock, a working explanation (template fallback is accepted), that the frontend serves its app shell, and that CORS allows the frontend origin. It exits non-zero on failure. `--frontend` is optional.
+The check uses GET and OPTIONS requests and needs no credentials. It verifies API liveness and model readiness, the same 23 correctly labelled wards in Model and Mock, and a working ward explanation. With `--frontend`, it also checks the app shell and CORS for that origin. The script exits non-zero on failure. The explanation request uses the built-in template when live explanations are disabled.
 
 ## Liveness and model-data readiness
 
