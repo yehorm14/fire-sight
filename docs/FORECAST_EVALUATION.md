@@ -1,6 +1,6 @@
 # Glasgow ward forecast evaluation
 
-The three-year moving average had the lowest historical mean absolute error at all three leads. The weighted trend's residual range covered 88% of one-year observations and 73% of three-year observations. The dashboard still displays the weighted trend and its historical projections for FY2023/24–FY2025/26. These results do not establish operational accuracy.
+The three-year moving average had the lowest historical mean absolute error at all three leads. The weighted trend's residual range covered 88% of one-year observations and 73% of three-year observations. The previous dashboard release used this direct series for projections covering FY2023/24–FY2025/26. The [current release](PIPELINE.md#glasgow-ward-forecast-release) uses a separately versioned best-fit series. These results do not establish operational accuracy.
 
 ## Reproduce the backtest
 
@@ -37,7 +37,7 @@ The [Fire – Type of Incident release](https://data.gov.scot/dataset/fire___typ
 | Original Fire – Type of Incident CSV, resource `f6b74111-b687-45dc-885d-66857bef37ba` | `ad3bb916071480bd913157a8bbdb28532cbff172162a6c0fc32333e0234f9f94` |
 | Filtered ward observation snapshot | `7bf600b93ff765de52f141e376e65f95af7f830c2ba97b389847e55104eb211c` |
 | Bundled WD24 map | `86fa0fc0112b1335cff186e06fc006249438ea37a31618894e9ac9f2b06c01cd` |
-| Regenerated production forecast CSV | `615c49b4eb38b77a64e8d13857946a43a7856ae110706fa03b6d0ad809f84921` |
+| Archived direct-series forecast CSV | `615c49b4eb38b77a64e8d13857946a43a7856ae110706fa03b6d0ad809f84921` |
 
 Contains public sector information licensed under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
 

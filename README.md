@@ -38,9 +38,9 @@ flowchart LR
     D --> F["React and Leaflet<br/>map"]
 ```
 
-To see a projection, choose **Model**, open a ward on the map and select a financial year under **Ward projection**. The open popup updates the projected dwelling-fire count and residual range. The baseline risk colour stays fixed when switching years. The last observed financial year is 2022/2023.
+To see a projection, choose **Model**, open a ward on the map and select a financial year under **Ward projection**. The popup shows the projected dwelling-fire count, the SFRS source through FY2025/26, and whether a prediction interval is available. The baseline risk colour stays fixed when switching years. The current release covers FY2026/27–FY2028/29. [Forecast release notes](docs/PIPELINE.md#glasgow-ward-forecast-release).
 
-![Fire Sight showing Linn's 2025/2026 projection and the observed SFRS data span](docs/images/annual-ward-projection.png)
+![Linn's FY2028/29 ward projection showing 20 dwelling fires and an unavailable prediction interval](docs/images/annual-ward-projection.png)
 
 The default dashboard shows the ward boundaries with no external basemap.
 

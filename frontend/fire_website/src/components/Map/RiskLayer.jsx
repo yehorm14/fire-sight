@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { GeoJSON } from 'react-leaflet';
 import { BACKEND_URL } from '../../config';
+import { forecastReleaseDescription, projectionSummary } from '../../wardProjection';
 import { describeFailure } from '../../apiError';
 
 
@@ -25,20 +26,16 @@ function showProjection(popup, prediction, lead) {
   const container = popup?.getElement()?.querySelector('[data-projection]');
   if (!container) return;
   container.replaceChildren();
-  const result = prediction?.projections?.find((step) => step.lead === lead);
+  const projection = projectionSummary(prediction, lead);
   const isModel = prediction?.period_unit === 'financial_year';
 
   if (lead) {
     const row = document.createElement('p');
     row.className = 'popup-row';
-    if (result) {
-      const period = isModel
-        ? (result.financial_year ? `FY ${result.financial_year}` : `Financial-year step ${lead}`)
-        : `Sample months ${lead - 5}–${lead}`;
-      const unit = isModel ? 'dwelling fires' : 'sample incidents';
-      const range = result.lower != null && result.upper != null
-        ? ` (residual range ${result.lower}–${result.upper})` : '';
-      row.textContent = `${period}: ${result.forecast} ${unit}${range}`;
+    if (projection) {
+      const { step, period, units, uncertainty } = projection;
+      row.textContent = period + ': ' + step.forecast + ' ' + units
+        + (uncertainty ? ' · ' + uncertainty : '');
     } else {
       row.textContent = 'Projection unavailable for this period.';
     }
@@ -58,13 +55,14 @@ function showProjection(popup, prediction, lead) {
     text.textContent = 'Click for AI-powered prevention and capacity planning recommendations.';
   }
 
-  if (prediction?.note) {
+  const release = forecastReleaseDescription(prediction);
+  if (release || prediction?.note) {
     const note = document.createElement('p');
     note.className = 'popup-row';
     const { first_financial_year: first, last_financial_year: last, years_of_data: years } = prediction;
-    note.textContent = isModel && first && last && years
+    note.textContent = release || (isModel && first && last && years
       ? `SFRS dwelling-fire data · ${years} observed years, FY ${first} to ${last}`
-      : prediction.note;
+      : prediction.note);
     container.append(note);
   }
 
@@ -131,7 +129,9 @@ const RiskLayer = ({ lead = 0, hoveredRiskBand, dataSource, geoData, selectedWar
 
     const sourceBadge = `<span class="popup-source-badge popup-source-badge--${isModel ? 'model' : 'mock'}">${isModel ? 'Linear model' : 'Mock data'}</span>`;
 
-    layer.bindPopup(`
+    // Leaflet reuses this node when updating the popup layout.
+    const content = document.createElement('div');
+    content.innerHTML = `
       <div class="custom-popup" style="min-width: 220px;">
         <div class="popup-header">
           <h3>${p.ward_name ?? p.name ?? 'Unknown area'}</h3>
@@ -171,7 +171,8 @@ const RiskLayer = ({ lead = 0, hoveredRiskBand, dataSource, geoData, selectedWar
           </div>
         </div>
       </div>
-    `, { maxHeight: 270 });
+    `;
+    layer.bindPopup(content, { maxHeight: 270 });
 
     if (!layer.__aiExplainWired) {
       layer.__aiExplainWired = true;

@@ -292,11 +292,11 @@ without claiming official operational certainty.
 
 ## Ward projections
 
-In Model mode, use `properties.prediction.projections` from the ward GeoJSON or ward detail endpoint. Each entry carries a `lead` (1, 2 or 3 financial years after `last_financial_year`), `financial_year`, `forecast`, `lower` and `upper`. Values describe dwelling fires in that financial year. `period_unit` is `financial_year`. Check `source`, `first_financial_year`, `last_financial_year` and `years_of_data` for provenance. `range_method: residual_spread` describes historical fit error. A missing range bound is returned as `null`.
+In Model mode, use `properties.prediction.projections` from the ward GeoJSON or ward detail endpoint. Each entry carries a `lead` (1, 2 or 3 financial years after `last_financial_year`), `financial_year`, `forecast`, `lower` and `upper`. Values describe dwelling fires in that financial year. `period_unit` is `financial_year`. Check `source`, `first_financial_year`, `last_financial_year` and `years_of_data` for provenance. The current release attaches `forecast_release` with the observation source, boundary edition, model version, issue date and target periods. `interval_status: withheld_after_evaluation` means both bounds, `interval_method`, `interval_nominal_level` and `range_method` are `null`. Older annual artifacts can report `range_method: residual_spread` for historical fit error.
 
-The deprecated Model response keys `forecast_6mo`, `forecast_12mo` and `forecast_18mo` temporarily remain aliases for annual steps 1, 2 and 3. Update both the field lookup and its label. `forecast_lower` and `forecast_upper` alias only the first annual step. Historical CSVs can still be loaded. Regenerate the CSV to obtain per-year bounds for all three steps.
+The deprecated Model response keys `forecast_6mo`, `forecast_12mo` and `forecast_18mo` temporarily remain aliases for annual steps 1, 2 and 3. Update both the field lookup and its label. `forecast_lower` and `forecast_upper` alias only the first annual step. Historical CSVs can still be loaded. Both aliases are `null` for a point-only release.
 
-Mock responses use `period_unit: month` with sample six-month bins ending at leads 6, 12 and 18, and have no calendar-year dates. The same mock values remain available under their original keys. `GET /api/explain` accepts a ward projection's `lead` to explain that period. An omitted lead uses the first projection and `lead=0` uses the baseline score.
+Mock responses use `period_unit: month` with sample six-month bins ending at leads 6, 12 and 18, and have no calendar-year dates. The same mock values remain available under their original keys. `GET /api/explain` accepts a ward projection's `lead` to explain that period. An omitted lead uses the first projection and `lead=0` uses the baseline score. A versioned Model explanation also returns the selected `projection` and matching `forecast_release`.
 
 ### Ward evidence and DataZones
 

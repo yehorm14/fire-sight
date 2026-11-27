@@ -55,6 +55,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--api", required=True, help="API base URL, no trailing slash")
     parser.add_argument("--frontend", help="Frontend URL; also checks CORS for its origin")
+    parser.add_argument(
+        "--require-forecast-release", action="store_true",
+        help="require a versioned point forecast and verify its built-in explanation",
+    )
     args = parser.parse_args(argv)
     api = args.api.rstrip("/")
     failures = []
@@ -84,9 +88,13 @@ def main(argv=None):
             print(f"INFO  {problem}")
 
     ward_ids = {}
+    model_map = {}
     for source in ("model", "mock"):
         status, _, body = fetch(f"{api}/api/strategic/wards.geojson?source={source}")
-        ids = read_ward_ids(safe_json(body), source) if status == 200 else set()
+        geography = safe_json(body) if status == 200 else {}
+        ids = read_ward_ids(geography, source)
+        if source == "model":
+            model_map = geography
         ward_ids[source] = ids
         check(
             f"{source.capitalize()} ward GeoJSON has 23 correctly labelled wards",
@@ -113,6 +121,54 @@ def main(argv=None):
             and bool(text.strip()),
             f"HTTP {status}, source={explained.get('source')}",
         )
+
+    release = info.get("ward_forecast_release")
+    if args.require_forecast_release or release:
+        check(
+            "Ward forecast release declares withheld intervals",
+            isinstance(release, dict)
+            and bool(release.get("release_id"))
+            and release.get("interval_status") == "withheld_after_evaluation"
+            and "interval_method" in release and release["interval_method"] is None
+            and "interval_nominal_level" in release and release["interval_nominal_level"] is None,
+        )
+        if isinstance(release, dict) and len(ward_ids["model"]) == 23:
+            first_ward = next(
+                feature["properties"] for feature in model_map["features"]
+                if feature["properties"]["ward_id"] == ward_id
+            )
+            prediction = first_ward.get("prediction") or {}
+            steps = prediction.get("projections") or []
+            status, _, body = fetch(f"{api}/api/strategic/wards/{ward_id}?source=model")
+            detail = safe_json(body).get("properties") or {}
+            check(
+                "Map and ward detail agree on the point forecast and release",
+                status == 200 and detail.get("prediction") == prediction
+                and prediction.get("forecast_release") == release
+                and [step.get("financial_year") for step in steps] == release.get("target_financial_years")
+                and bool(steps)
+                and all(
+                    "lower" in step and step["lower"] is None
+                    and "upper" in step and step["upper"] is None
+                    and type(step.get("forecast")) is int and step["forecast"] >= 0
+                    for step in steps
+                ),
+            )
+            check(
+                "Ward explanation uses the same point forecast and release",
+                bool(steps)
+                and explained.get("projection") == steps[0]
+                and explained.get("forecast_release") == release,
+            )
+            if args.require_forecast_release or explained.get("source") == "fallback":
+                check(
+                    "Built-in explanation reports the count, source and unavailable interval",
+                    bool(steps)
+                    and explained.get("source") == "fallback"
+                    and f"{steps[0]['forecast']} dwelling fires projected for FY {steps[0]['financial_year']}" in (text or "")
+                    and release.get("observation_source", {}).get("label", "") in (text or "")
+                    and "Prediction interval unavailable" in (text or ""),
+                )
 
     if args.frontend:
         frontend = args.frontend.rstrip("/")

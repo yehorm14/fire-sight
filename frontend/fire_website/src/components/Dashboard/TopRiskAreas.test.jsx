@@ -15,9 +15,20 @@ const ward = (id, name, score) => ({
   prediction: {
     period_unit: 'financial_year',
     first_financial_year: '2009/2010',
-    last_financial_year: '2022/2023',
+    last_financial_year: '2025/2026',
     last_observed_count: 23,
-    projections: [{ lead: 1, financial_year: '2023/2024', forecast: 31, lower: 11, upper: 42 }],
+    interval_status: 'withheld_after_evaluation',
+    forecast_release: {
+      observation_source: {
+        label: 'SFRS FY2025/26 best-fit ward series',
+        last_financial_year: '2025/2026',
+        method: 'Whole 2022 DataZones assigned to published electoral wards',
+      },
+      boundary: { edition: 'WD24' },
+      model: { id: 'recency_weighted_linear_trend', version: 1 },
+      issue_date: '2026-11-26',
+    },
+    projections: [{ lead: 1, financial_year: '2026/2027', forecast: 31, lower: null, upper: null }],
   },
 })
 const geography = (wards) => ({ features: wards.map((properties) => ({ properties })) })
@@ -86,7 +97,7 @@ describe('TopRiskAreas', () => {
     const fetcher = vi.fn(async (url) => {
       if (url.endsWith('/api/status')) return json({
         model_loaded: true,
-        ward_projection_periods: [{ lead: 1, financial_years: ['2023/2024'] }],
+        ward_projection_periods: [{ lead: 1, financial_years: ['2026/2027'] }],
       })
       if (url.includes('/api/strategic/wards.geojson')) {
         return json(geography([ward('w1', 'Linn', 68), ward('w2', 'Southside Central', 54)]))
@@ -109,7 +120,7 @@ describe('TopRiskAreas', () => {
     expect(screen.getByLabelText('Map selection')).toHaveTextContent('w1')
     const linn = screen.getByRole('region', { name: 'Linn evidence' })
     expect(within(linn).getByText('Vulnerability index')).toBeVisible()
-    expect(within(linn).getByText('23 fires').parentElement).toHaveTextContent('FY 2022/2023')
+    expect(within(linn).getByText('23 fires').parentElement).toHaveTextContent('FY 2025/2026')
     await user.click(within(linn).getByRole('button', { name: 'Pin for comparison' }))
 
     await user.click(screen.getByRole('button', { name: 'Open Southside Central on map' }))
@@ -117,8 +128,12 @@ describe('TopRiskAreas', () => {
     expect(screen.getByText('Linn · 68/100')).toBeVisible()
     const southside = screen.getByRole('region', { name: 'Southside Central evidence' })
     await user.selectOptions(screen.getByRole('combobox', { name: 'Ward projection' }), '1')
-    expect(within(southside).getByText('31 dwelling fires').parentElement).toHaveTextContent('FY 2023/2024')
-    expect(within(southside).getByText('23 fires').parentElement).toHaveTextContent('FY 2022/2023')
+    expect(within(southside).getByText('31 dwelling fires').parentElement).toHaveTextContent('FY 2026/2027')
+    expect(within(southside).getByText('23 fires').parentElement).toHaveTextContent('FY 2025/2026')
+    expect(within(southside).getByText(/Prediction interval unavailable/)).toBeVisible()
+    expect(within(southside).getByText(/SFRS FY2025\/26 best-fit ward series/))
+      .toHaveTextContent('WD24 · Observations through FY 2025/2026'.replace('WD24 ·', 'WD24) ·'))
+    expect(within(southside).getByText(/Issued 2026-11-26/)).toHaveTextContent('recency_weighted_linear_trend v1')
 
     await user.click(within(southside).getByRole('button', { name: 'Show DataZones (1)' }))
     expect(await within(southside).findByRole('alert')).toHaveTextContent('Could not load the ward’s DataZones')

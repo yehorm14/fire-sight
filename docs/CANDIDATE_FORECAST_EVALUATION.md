@@ -1,6 +1,6 @@
 # Best-fit ward forecast evaluation
 
-**Advance the pooled Poisson model for further research. Retain the existing weighted trend as the point-forecast fallback.** The pooled model reduced ward error on matched targets and passed the accuracy gate. It missed the fixed-holdout city bias limit at two years, and its empirical prediction ranges did not pass the coverage gate. This evaluation leaves the published forecast on the current direct series. A separate release can refit the fallback point model on the best-fit observations if it labels the source and reports calibrated ranges as unavailable.
+**Advance the pooled Poisson model for further research. Retain the existing weighted trend as the point-forecast fallback.** The pooled model reduced ward error on matched targets and passed the accuracy gate. It missed the fixed-holdout city bias limit at two years, and its empirical prediction ranges did not pass the coverage gate. The [forecast release](PIPELINE.md#glasgow-ward-forecast-release) refits the fallback point model on the best-fit observations and records that prediction intervals were withheld.
 
 ## Data and replay
 

@@ -128,7 +128,7 @@ def main() -> None:
     except ImportError as exc:
         parser.exit(1, f"Unable to read SIMD indicators. Install data-pipeline/requirements.txt: {exc}\n")
     zones = build_zones(simd, indicators)
-    ward_forecasts = None if args.zones_only else load_ward_projections(RAW / "fire_statistics_scotland.csv")
+    ward_forecasts = None if args.zones_only else load_ward_projections()
 
     OUTPUT.mkdir(exist_ok=True)
     zones_path = OUTPUT / "glasgowzones.csv"

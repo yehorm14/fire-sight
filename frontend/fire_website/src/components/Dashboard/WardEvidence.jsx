@@ -2,27 +2,17 @@ import { useState } from 'react';
 import { describeFailure } from '../../apiError';
 import { BACKEND_URL } from '../../config';
 import { useApiResource } from '../../useApiResource';
-
-function projectionSummary(prediction, lead) {
-  const step = prediction?.projections?.find((candidate) => candidate.lead === lead);
-  if (!step) return null;
-  const annual = prediction.period_unit === 'financial_year';
-  const period = annual && step.financial_year
-    ? 'FY ' + step.financial_year
-    : annual ? 'Year ' + lead : 'sample months ' + (lead - 5) + '–' + lead;
-  const units = annual ? 'dwelling fires' : 'sample incidents';
-  return { step, period, units };
-}
+import { forecastReleaseDescription, projectionSummary } from '../../wardProjection';
 
 function Projection({ prediction, lead }) {
   if (!lead) return null;
   const projection = projectionSummary(prediction, lead);
   if (!projection) return <p>Projection unavailable for this period.</p>;
-  const { step, period, units } = projection;
+  const { step, period, units, uncertainty } = projection;
   return (
     <p>
       {period} · <strong>{step.forecast} {units}</strong>
-      {step.lower != null && step.upper != null && ' (residual range ' + step.lower + '–' + step.upper + ')'}
+      {uncertainty && ' · ' + uncertainty}
     </p>
   );
 }
@@ -99,6 +89,7 @@ export default function WardEvidence({ ward, dataSource, lead, onPin, pinned }) 
   const { ward_id: wardId, prediction } = ward;
   const isModel = dataSource === 'model';
   const hasWardZones = isModel && ward.score_method === 'datazone_aggregate';
+  const release = isModel ? forecastReleaseDescription(prediction) : '';
   return (
     <section className="ward-evidence top-area-item" aria-label={ward.ward_name + ' evidence'}>
       <h4>{ward.ward_name}</h4>
@@ -130,6 +121,7 @@ export default function WardEvidence({ ward, dataSource, lead, onPin, pinned }) 
           {lead
             ? <Projection prediction={prediction} lead={lead} />
             : <p>Choose a period in the Ward projection control.</p>}
+          {release && <p>{release}</p>}
         </dd>
       </dl>
 

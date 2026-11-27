@@ -50,7 +50,10 @@ def test_model_source_has_forecast_for_every_ward(client):
         assert prediction["period_unit"] == "financial_year"
         assert [step["lead"] for step in prediction["projections"]] == [1, 2, 3]
         for step in prediction["projections"]:
-            assert step["lower"] <= step["forecast"] <= step["upper"]
+            assert step["lower"] is None and step["upper"] is None
+            assert isinstance(step["forecast"], int) and step["forecast"] >= 0
+        assert prediction["interval_status"] == "withheld_after_evaluation"
+        assert prediction["interval_method"] is None and prediction["interval_nominal_level"] is None
 
 
 def test_single_ward_and_404(client):
@@ -116,14 +119,18 @@ def test_cors_allows_local_frontend_only(client):
 def test_model_forecast_reports_years_from_data(client):
     props = client.get(f"/api/strategic/wards/{NORTH_EAST}", params={"source": "model"}).json()["properties"]
     prediction = props["prediction"]
-    assert prediction["years_of_data"] == 14
-    assert (prediction["first_year"], prediction["last_year"]) == (2009, 2023)
-    assert "14 years" in prediction["note"] and "2009–2023" in prediction["note"]
+    assert prediction["years_of_data"] == 17
+    assert (prediction["first_year"], prediction["last_year"]) == (2009, 2026)
+    assert "17 years" in prediction["note"] and "2009–2026" in prediction["note"]
 
 
 def test_model_explain_text_uses_data_years(client):
     text = client.get("/api/explain", params={"mode": "ward", "id": GOVAN, "source": "model"}).json()["text"]
-    assert "14 years of SFRS dwelling fire data (2009–2023)" in text
+    assert "SFRS FY2025/26 best-fit ward series" in text
+    assert "Observations through FY 2025/2026" in text
+    assert "recency_weighted_linear_trend v1, issued 2026-11-26" in text
+    assert "Prediction interval unavailable" in text
+    assert "residual range" not in text
 
 
 def test_cors_warning_when_unset_in_production(monkeypatch, caplog):
@@ -145,23 +152,37 @@ def test_cors_warning_when_unset_in_production(monkeypatch, caplog):
 def test_model_projection_dates_and_legacy_client_aliases(client):
     status = client.get("/api/status").json()
     assert status["ward_projection_periods"] == [
-        {"lead": 1, "financial_years": ["2023/2024"]},
-        {"lead": 2, "financial_years": ["2024/2025"]},
-        {"lead": 3, "financial_years": ["2025/2026"]},
+        {"lead": 1, "financial_years": ["2026/2027"]},
+        {"lead": 2, "financial_years": ["2027/2028"]},
+        {"lead": 3, "financial_years": ["2028/2029"]},
     ]
     ward = client.get("/api/strategic/wards/S13002967", params={"source": "model"}).json()
     prediction = ward["properties"]["prediction"]
     assert prediction["source"] == "model"
-    assert prediction["last_financial_year"] == "2022/2023"
+    assert prediction["last_financial_year"] == "2025/2026"
     assert prediction["first_financial_year"] == "2009/2010"
     assert [(r["financial_year"], r["forecast"]) for r in prediction["projections"]] == [
-        ("2023/2024", 30), ("2024/2025", 29), ("2025/2026", 28),
+        ("2026/2027", 23), ("2027/2028", 21), ("2028/2029", 20),
     ]
-    assert [prediction[key] for key in ("forecast_6mo", "forecast_12mo", "forecast_18mo")] == [30, 29, 28]
+    assert [prediction[key] for key in ("forecast_6mo", "forecast_12mo", "forecast_18mo")] == [23, 21, 20]
+    assert prediction["forecast_lower"] is None and prediction["forecast_upper"] is None
+    assert prediction["forecast_release"] == status["ward_forecast_release"]
+    release = prediction["forecast_release"]
+    assert release["issue_date"] == "2026-11-26"
+    assert release["boundary"]["edition"] == "WD24"
+    assert release["observation_source"]["id"] == "sfrs_best_fit_ward_dwelling_fires_fy2025_26"
+    assert release["unit"] == "dwelling fires per ward per financial year"
+
+    features = client.get("/api/strategic/wards.geojson", params={"source": "model"}).json()["features"]
+    linn = next(feature for feature in features if feature["properties"]["ward_id"] == "S13002967")
+    assert linn["properties"]["prediction"] == prediction
     explain = client.get("/api/explain", params={
         "mode": "ward", "id": "S13002967", "source": "model", "lead": 3,
-    }).json()["text"]
-    assert "28 dwelling fires projected for FY 2025/2026" in explain
+    }).json()
+    assert explain["source"] == "fallback"
+    assert explain["projection"] == prediction["projections"][2]
+    assert explain["forecast_release"] == release
+    assert "20 dwelling fires projected for FY 2028/2029" in explain["text"]
 
 
 def test_legacy_ward_csv_has_only_the_saved_range(client, monkeypatch, tmp_path):

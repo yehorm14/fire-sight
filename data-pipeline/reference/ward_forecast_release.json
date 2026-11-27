@@ -1,0 +1,42 @@
+{
+  "release_id": "glasgow_ward_dwelling_fires_2026-11-26",
+  "issue_date": "2026-11-26",
+  "model": {
+    "id": "recency_weighted_linear_trend",
+    "version": 1,
+    "inputs": "annual ward dwelling-fire counts"
+  },
+  "outcome": "SFRS-attended incidents classified Dwelling Fire, all accident statuses",
+  "unit": "dwelling fires per ward per financial year",
+  "observation_source": {
+    "id": "sfrs_best_fit_ward_dwelling_fires_fy2025_26",
+    "label": "SFRS FY2025/26 best-fit ward series",
+    "method": "Whole 2022 DataZones assigned to published electoral wards",
+    "first_financial_year": "2009/2010",
+    "last_financial_year": "2025/2026",
+    "file": {
+      "name": "sfrs_best_fit_ward_dwelling_fires_fy2025_26.csv",
+      "sha256": "9bd190e6305254500e680766dd830522b3d087fdc6bba1b4c25c269405ca0d00"
+    },
+    "manifest": {
+      "name": "sfrs_best_fit_ward_dwelling_fires_fy2025_26.manifest.json",
+      "sha256": "95e2b31bbd3d31407f02de98ec6c00170e461dbd3ba6c08467c9ca17408132f3"
+    }
+  },
+  "boundary": {
+    "edition": "WD24",
+    "sha256": "86fa0fc0112b1335cff186e06fc006249438ea37a31618894e9ac9f2b06c01cd"
+  },
+  "target_financial_years": [
+    "2026/2027",
+    "2027/2028",
+    "2028/2029"
+  ],
+  "interval_status": "withheld_after_evaluation",
+  "interval_method": null,
+  "interval_nominal_level": null,
+  "evaluation": {
+    "name": "sfrs_candidate_forecast_evaluation_fy2025_26.json",
+    "sha256": "ec26c8a160b58e0e7707d153f183434ca2343802d01adb8de38c8e001486ec86"
+  }
+}

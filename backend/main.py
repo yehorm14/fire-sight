@@ -133,7 +133,13 @@ def load_ward_forecasts() -> Dict[str, Dict[str, Any]]:
         import pandas as pd
     except ImportError:
         return {}
-    df = pd.read_csv(WARD_FORECASTS_CSV)
+    try:
+        df = pd.read_csv(WARD_FORECASTS_CSV, keep_default_na=False, na_values=[""])
+    except (OSError, ValueError) as exc:
+        logger.warning("Could not load ward forecast CSV: %s", exc)
+        return {}
+    if "ward_id" not in df:
+        return {}
     records = sanitize_json_records(df.to_dict(orient="records"))
     return {row["ward_id"]: row for row in records}
 
@@ -141,6 +147,13 @@ def load_ward_forecasts() -> Dict[str, Dict[str, Any]]:
 zones: List[Dict[str, Any]] = load_zones()
 zones_by_id: Dict[str, Dict[str, Any]] = {z["zoneid"]: z for z in zones}
 ward_forecasts: Dict[str, Dict[str, Any]] = load_ward_forecasts()
+WARD_FORECAST_RELEASE = data_contract.read_ward_release()
+WARD_FORECAST_RELEASE_PROBLEMS = (
+    data_contract.check_ward_forecasts(WARD_FORECASTS_CSV, WARDS_FILE)
+    + data_contract.check_manifest(files=[WARD_FORECASTS_CSV], wards_file=WARDS_FILE)
+    if any(data_contract.WARD_RELEASE_COLUMNS & row.keys() for row in ward_forecasts.values())
+    else []
+)
 
 
 def build_decile_lookup(zone_list: List[Dict[str, Any]]) -> Dict[int, int]:
@@ -322,7 +335,16 @@ def annual_ward_prediction(row):
     last_observed_start = data_contract.financial_year_start(last_period)
     legacy_keys = ("forecast_6mo", "forecast_12mo", "forecast_18mo")
     projections = []
-    if last_observed_start is not None:
+    declares_release = bool(data_contract.WARD_RELEASE_COLUMNS & row.keys())
+    release = WARD_FORECAST_RELEASE if (
+        declares_release
+        and not WARD_FORECAST_RELEASE_PROBLEMS
+        and data_contract.release_row_matches(row, WARD_FORECAST_RELEASE)
+        and first_period == WARD_FORECAST_RELEASE["observation_source"]["first_financial_year"]
+        and last_period == WARD_FORECAST_RELEASE["observation_source"]["last_financial_year"]
+    ) else None
+    interval_status = release["interval_status"] if release else None
+    if last_observed_start is not None and (not declares_release or release):
         for lead, legacy_key in zip(data_contract.HORIZON_LEADS, legacy_keys):
             expected_start = last_observed_start + lead
             forecast_key = f"forecast_{lead}yr"
@@ -341,9 +363,8 @@ def annual_ward_prediction(row):
 
             if data_contract.financial_year_start(period) != expected_start or not data_contract.is_nonnegative_count(count):
                 continue
-            if validate_bounds and (
-                not all(data_contract.is_nonnegative_count(v) for v in (lower, upper))
-                or not lower <= count <= upper
+            if (release or validate_bounds) and not data_contract.bounds_match_interval(
+                interval_status, lower, count, upper,
             ):
                 continue
             projections.append({
@@ -365,7 +386,13 @@ def annual_ward_prediction(row):
         "source": "model",
         "period_unit": "financial_year",
         "projections": projections,
-        "range_method": "residual_spread",
+        "range_method": None if release else "residual_spread",
+        **({
+            "forecast_release": release,
+            "interval_status": interval_status,
+            "interval_method": release["interval_method"],
+            "interval_nominal_level": release["interval_nominal_level"],
+        } if release else {}),
         "years_of_data": years,
         "first_year": first,
         "last_year": last,
@@ -399,6 +426,16 @@ def projection_text(prediction, lead):
         label = f"{step['forecast']} sample incidents projected for the six-month period ending at month {lead}"
     if step["lower"] is not None and step["upper"] is not None:
         label += f" (residual range {step['lower']}–{step['upper']})"
+    release = prediction.get("forecast_release")
+    if release:
+        source = release["observation_source"]
+        model = release["model"]
+        return (
+            f"{label}. {source['label']} ({source['method']}; {release['boundary']['edition']}). "
+            f"Observations through FY {source['last_financial_year']}. "
+            f"Model {model['id']} v{model['version']}, issued {release['issue_date']}. "
+            "Prediction interval unavailable."
+        )
     return f"{label}. {prediction['note']}"
 
 
@@ -410,6 +447,8 @@ def model_source_version() -> Optional[str]:
     paths = [ZONES_CSV]
     if ward_forecasts:
         paths.append(WARD_FORECASTS_CSV)
+    if WARD_FORECAST_RELEASE and not WARD_FORECAST_RELEASE_PROBLEMS:
+        paths.append(data_contract.WARD_RELEASE_JSON)
     if wards_by_id:
         paths.append(WARDS_FILE)
     if ward_lookup is not None:
@@ -453,6 +492,8 @@ def model_unavailable_reasons(
         return reasons  # The baseline explanation uses only the ward score.
     if not ward_forecasts:
         return [*reasons, "ward forecasts are not loaded"]
+    if WARD_FORECAST_RELEASE_PROBLEMS:
+        return [*reasons, *WARD_FORECAST_RELEASE_PROBLEMS]
 
     required_leads = set(data_contract.HORIZON_LEADS if lead is None else (lead,))
     missing_forecasts = []
@@ -581,7 +622,7 @@ def fallback_ward_explanation(feature, lead=6):
     )
 
 
-def fallback_ward_explanation_model(feature, lead=1):
+def fallback_ward_explanation_model(feature, lead=1, prediction=None):
     props = feature["properties"]
     decile = props.get("simd_decile")
     model_score = ward_model_score(props)
@@ -596,14 +637,14 @@ def fallback_ward_explanation_model(feature, lead=1):
     )
     priority = "high" if band == "high" else "near-term" if band == "medium" else "routine"
 
-    wf = ward_forecasts.get(props["ward_id"], {})
-    prediction = annual_ward_prediction(wf)
+    if prediction is None:
+        prediction = annual_ward_prediction(ward_forecasts.get(props["ward_id"], {}))
     if lead == 0 or selected_projection(prediction, lead):
         capacity_line = projection_text(prediction, lead)
         key_line = (
             f"Prioritise smoke alarm installation and Home Fire Safety Check campaigns in this ward; "
             f"risk score ({model_score}/100) is based on {basis} — "
-            f"re-assess quarterly as additional Census 2022 and EPC data are loaded."
+            "review it alongside current local incident and housing information."
         )
     else:
         capacity_line = (
@@ -878,7 +919,7 @@ def readiness_report() -> Dict[str, Any]:
     problems = (
         data_contract.check_ward_forecasts(WARD_FORECASTS_CSV, WARDS_FILE)
         + data_contract.check_zones(ZONES_CSV)
-        + data_contract.check_manifest(files=[WARD_FORECASTS_CSV, ZONES_CSV])
+        + data_contract.check_manifest(files=[WARD_FORECASTS_CSV, ZONES_CSV], wards_file=WARDS_FILE)
     )
     if not problems and not ward_forecasts:
         problems.append("ward forecasts were not loaded into the API")
@@ -926,14 +967,20 @@ def model_projection_periods():
 @app.get("/api/status")
 def api_status():
     n_components = max((z.get("n_score_components") or 0 for z in zones), default=0)
+    periods = model_projection_periods()
+    release_active = periods and not WARD_FORECAST_RELEASE_PROBLEMS and any(
+        data_contract.release_row_matches(row, WARD_FORECAST_RELEASE)
+        for row in ward_forecasts.values()
+    )
     return {
         "model_loaded": len(zones) > 0,
         "zones_count": len(zones),
-        "forecast_available": len(ward_forecasts) > 0,
+        "forecast_available": bool(periods),
+        "ward_forecast_release": WARD_FORECAST_RELEASE if release_active else None,
         "ward_forecasts_count": len(ward_forecasts),
         "ward_projection_periods": [
             {"lead": lead, "financial_years": sorted(years)}
-            for lead, years in sorted(model_projection_periods().items())
+            for lead, years in sorted(periods.items())
         ],
         "model_components_active": n_components,
         "model_components_total": 5,
@@ -1077,6 +1124,7 @@ def explain(
         source = "model" if mode == "zone" else "mock"
 
     provider_lead = None
+    forecast_fields = {}
     can_use_provider = True
     if mode == "ward":
         record = wards_by_id.get(record_id)
@@ -1085,7 +1133,13 @@ def explain(
         provider_lead = lead if lead is not None else (1 if source == "model" else 6)
         resolved = resolve_source(source, [record_id], lead=provider_lead)
         if resolved["data_source"] == "model":
-            fallback = fallback_ward_explanation_model(record, provider_lead)
+            prediction = annual_ward_prediction(ward_forecasts.get(record_id, {}))
+            fallback = fallback_ward_explanation_model(record, provider_lead, prediction)
+            if provider_lead and prediction.get("forecast_release"):
+                forecast_fields = {
+                    "forecast_release": prediction["forecast_release"],
+                    "projection": selected_projection(prediction, provider_lead),
+                }
         else:
             fallback = fallback_ward_explanation(record, provider_lead)
             can_use_provider = (
@@ -1119,6 +1173,7 @@ def explain(
         "mode": mode,
         **resolved,
         "source": "live" if live_text else "fallback",
+        **forecast_fields,
         "text": live_text or fallback,
     }
 

@@ -139,7 +139,7 @@ function App() {
 
       <p className="source-notice" role="note">
         {dataSource === 'model'
-          ? 'Model: SIMD 2020 vulnerability scores and historical annual projections of SFRS dwelling fires. Projection ranges describe model residuals.'
+          ? 'Model: SIMD 2020 vulnerability scores and annual projections based on SFRS dwelling-fire counts.'
           : 'Mock: illustrative sample values for demonstration, not real risk scores or forecasts.'}
         {' '}Premises and any sample events are illustrative overlays.
       </p>
