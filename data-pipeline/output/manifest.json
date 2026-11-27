@@ -3,12 +3,12 @@
   "period_unit": "financial_year",
   "history": {
     "first_financial_year": "2009/2010",
-    "last_financial_year": "2022/2023"
+    "last_financial_year": "2025/2026"
   },
   "projected_financial_years": [
-    "2023/2024",
-    "2024/2025",
-    "2025/2026"
+    "2026/2027",
+    "2027/2028",
+    "2028/2029"
   ],
   "sources": [
     {
@@ -22,8 +22,9 @@
       "url": "https://www.gov.scot/publications/scottish-index-of-multiple-deprivation-2020v2-indicator-data/"
     },
     {
-      "name": "SFRS fire statistics (type of incident)",
-      "publisher": "Scottish Fire and Rescue Service via data.gov.scot"
+      "name": "SFRS best-fit ward dwelling-fire counts, through FY2025/26",
+      "publisher": "Scottish Fire and Rescue Service and Scottish Government",
+      "url": "https://www.firescotland.gov.uk/publications/document/?id=9990"
     }
   ],
   "zone_model": {
@@ -34,12 +35,54 @@
   },
   "files": {
     "glasgow_ward_forecasts.csv": {
-      "sha256": "615c49b4eb38b77a64e8d13857946a43a7856ae110706fa03b6d0ad809f84921",
+      "sha256": "ae32e2f061c55769435e0d6b619185d083ae14fff1ad1aad0d12fb0690ba8158",
       "rows": 23
     },
     "glasgowzones.csv": {
       "sha256": "fa16694f1faef6c16e4d85192cee5531c01f4a0d7d1a4d827e5e3ac524059f44",
       "rows": 746
+    }
+  },
+  "ward_forecast_release": {
+    "release_id": "glasgow_ward_dwelling_fires_2026-11-26",
+    "issue_date": "2026-11-26",
+    "model": {
+      "id": "recency_weighted_linear_trend",
+      "version": 1,
+      "inputs": "annual ward dwelling-fire counts"
+    },
+    "outcome": "SFRS-attended incidents classified Dwelling Fire, all accident statuses",
+    "unit": "dwelling fires per ward per financial year",
+    "observation_source": {
+      "id": "sfrs_best_fit_ward_dwelling_fires_fy2025_26",
+      "label": "SFRS FY2025/26 best-fit ward series",
+      "method": "Whole 2022 DataZones assigned to published electoral wards",
+      "first_financial_year": "2009/2010",
+      "last_financial_year": "2025/2026",
+      "file": {
+        "name": "sfrs_best_fit_ward_dwelling_fires_fy2025_26.csv",
+        "sha256": "9bd190e6305254500e680766dd830522b3d087fdc6bba1b4c25c269405ca0d00"
+      },
+      "manifest": {
+        "name": "sfrs_best_fit_ward_dwelling_fires_fy2025_26.manifest.json",
+        "sha256": "95e2b31bbd3d31407f02de98ec6c00170e461dbd3ba6c08467c9ca17408132f3"
+      }
+    },
+    "boundary": {
+      "edition": "WD24",
+      "sha256": "86fa0fc0112b1335cff186e06fc006249438ea37a31618894e9ac9f2b06c01cd"
+    },
+    "target_financial_years": [
+      "2026/2027",
+      "2027/2028",
+      "2028/2029"
+    ],
+    "interval_status": "withheld_after_evaluation",
+    "interval_method": null,
+    "interval_nominal_level": null,
+    "evaluation": {
+      "name": "sfrs_candidate_forecast_evaluation_fy2025_26.json",
+      "sha256": "ec26c8a160b58e0e7707d153f183434ca2343802d01adb8de38c8e001486ec86"
     }
   }
 }

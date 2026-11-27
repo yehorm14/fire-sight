@@ -1,5 +1,6 @@
 """Generate ward projections independently of the SIMD scoring inputs."""
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import pandas as pd
 HERE = Path(__file__).resolve().parent
 WARDS_GEOJSON = HERE.parent / "backend" / "data" / "glasgow_wards.geojson"
 WARD_HISTORY_CSV = HERE / "reference" / "glasgow_ward_dwelling_fires.csv"
+WARD_RELEASE_JSON = HERE / "reference" / "ward_forecast_release.json"
 
 
 def forecast_ward(counts):
@@ -126,15 +128,40 @@ def mapped_ward_codes():
         return {feature["properties"]["ward_id"] for feature in json.load(source)["features"]}
 
 
-def load_ward_projections(fire_csv=WARD_HISTORY_CSV):
-    return project_wards(pd.read_csv(fire_csv), mapped_ward_codes())
+def load_ward_projections(fire_csv=None):
+    """Regenerate the published point release from its named, digest-pinned inputs."""
+    release = json.loads(WARD_RELEASE_JSON.read_text())
+    source = release["observation_source"]
+    if fire_csv is None:
+        fire_csv = WARD_RELEASE_JSON.parent / source["file"]["name"]
+    if hashlib.sha256(Path(fire_csv).read_bytes()).hexdigest() != source["file"]["sha256"]:
+        raise ValueError("Observation CSV does not match the ward forecast release input")
+    if hashlib.sha256(WARDS_GEOJSON.read_bytes()).hexdigest() != release["boundary"]["sha256"]:
+        raise ValueError("Ward boundaries do not match the ward forecast release input")
+
+    wards = project_wards(pd.read_csv(fire_csv), mapped_ward_codes())
+    for column in ("first_financial_year", "last_financial_year"):
+        if not wards[column].eq(source[column]).all():
+            raise ValueError(f"Ward observation periods differ from the release: {column}")
+    for lead, target in enumerate(release["target_financial_years"], start=1):
+        if not wards[f"financial_year_{lead}yr"].eq(target).all():
+            raise ValueError(f"Ward projections differ from the declared target: {target}")
+        wards[f"forecast_lower_{lead}yr"] = None
+        wards[f"forecast_upper_{lead}yr"] = None
+
+    return wards.assign(
+        forecast_release_id=release["release_id"],
+        interval_status=release["interval_status"],
+        interval_method=release["interval_method"],
+        interval_nominal_level=release["interval_nominal_level"],
+    )
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fire-csv", type=Path, default=WARD_HISTORY_CSV)
+    parser.add_argument("--fire-csv", type=Path, help="Alternate path to the same pinned observation CSV")
     args = parser.parse_args()
     output = HERE / "output"
     output.mkdir(exist_ok=True)

@@ -1,6 +1,6 @@
 # Data pipeline
 
-`data-pipeline/run_model.py` scores each Glasgow DataZone from five SIMD 2020 indicators (area deprivation decile, overcrowding, comparative illness factor, no central heating, crime rate) with fixed weights. It also fits a recency-weighted linear trend to yearly SFRS dwelling-fire counts for the 23 wards in `backend/data/glasgow_wards.geojson` and projects each of the first three financial years after the last observation. The committed data use 2009/2010 through 2022/2023, so the projected years are 2023/2024, 2024/2025 and 2025/2026. Each value is one financial year's dwelling-fire count. `notebook.ipynb` contains exploratory sample half-year logic and writes only to `build/exploratory/`.
+`data-pipeline/run_model.py` scores each Glasgow DataZone from five SIMD 2020 indicators (area deprivation decile, overcrowding, comparative illness factor, no central heating, crime rate) with fixed weights. It also fits a recency-weighted linear trend to yearly SFRS dwelling-fire counts for the 23 wards in `backend/data/glasgow_wards.geojson` and projects each of the first three financial years after the last observation. Each projection estimates one financial year's dwelling-fire count. The [current release](#glasgow-ward-forecast-release) covers FY2026/27–FY2028/29. `notebook.ipynb` contains exploratory sample half-year logic and writes only to `build/exploratory/`.
 
 The processed output is committed in `data-pipeline/output/`, so the API runs without the raw data. The full raw downloads stay outside git. A compact official ward observation snapshot supports offline regeneration and evaluation.
 
@@ -10,11 +10,12 @@ Install the pinned pipeline dependencies, then fetch the raw inputs and run the 
 
 ```bash
 python -m pip install -r data-pipeline/requirements.txt
-python data-pipeline/download_datasets.py
+python data-pipeline/download_datasets.py --zones-only
 python data-pipeline/run_model.py
+python backend/data_contract.py --write-manifest
 ```
 
-The downloader fetches the [SIMD 2020v2 population-weighted deciles](https://www.opendata.nhs.scot/dataset/scottish-index-of-multiple-deprivation/resource/acade396-8430-4b34-895a-b3e757fa346e) as `raw/simd2020.csv`, the [SIMD 2020v2 indicators](https://www.gov.scot/publications/scottish-index-of-multiple-deprivation-2020v2-indicator-data/) as `raw/simd2020_indicators.xlsx` and the [SFRS fire statistics](https://data.gov.scot/dataset/fire___type_of_incident) as `raw/fire_statistics_scotland.csv`. The population-weighted deciles are the ones used for the original score. `--boundaries` also downloads DataZone boundaries and needs GeoPandas.
+The downloader fetches the [SIMD 2020v2 population-weighted deciles](https://www.opendata.nhs.scot/dataset/scottish-index-of-multiple-deprivation/resource/acade396-8430-4b34-895a-b3e757fa346e) as `raw/simd2020.csv` and the [SIMD 2020v2 indicators](https://www.gov.scot/publications/scottish-index-of-multiple-deprivation-2020v2-indicator-data/) as `raw/simd2020_indicators.xlsx`. The population-weighted deciles are the ones used for the original score. `--boundaries` also downloads DataZone boundaries and needs GeoPandas.
 
 To rebuild just the DataZone scores and refresh the manifest:
 
@@ -24,13 +25,26 @@ python data-pipeline/run_model.py --zones-only
 python backend/data_contract.py --write-manifest
 ```
 
-To regenerate only the ward projection CSV, run `python data-pipeline/ward_forecasts.py`. This reads the checked-in annual observations and uses the same forecast function as `run_model.py`. Use `--fire-csv PATH` to supply an official source CSV. Each ward must have consecutive, unique financial-year observations.
+To regenerate the ward projection CSV and update the output manifest without downloads:
 
-Run `python data-pipeline/evaluate_ward_forecasts.py` for the rolling-origin comparison against last-value and three-year mean baselines. See the [forecast evaluation](FORECAST_EVALUATION.md) for the source audit, out-of-sample errors and residual range coverage.
+```bash
+python data-pipeline/ward_forecasts.py
+python backend/data_contract.py --write-manifest
+```
+
+Both pipeline commands use the same digest-pinned observation panel and model. `--fire-csv PATH` accepts another copy of that pinned panel. Each ward must have consecutive, unique financial-year observations.
+
+Run `python data-pipeline/evaluate_candidate_forecasts.py` to reproduce the [release model comparison](CANDIDATE_FORECAST_EVALUATION.md). Run `python data-pipeline/evaluate_ward_forecasts.py` for the historical direct-series comparison against last-value and three-year mean baselines. See the [forecast evaluation](FORECAST_EVALUATION.md) for the source audit, out-of-sample errors and residual range coverage.
+
+## Glasgow ward forecast release
+
+The [26 November 2026 release definition](../data-pipeline/reference/ward_forecast_release.json) pins the observation panel, evaluation and WD24 map boundaries. It refits the recency-weighted linear trend on 17 financial years of SFRS-attended dwelling-fire observations from FY2009/10 through FY2025/26. The [best-fit series](BEST_FIT_WARD_SERIES.md) assigns each whole 2022 DataZone to a published electoral ward. A DataZone that spans wards can contribute fires to a different ward than a location-level assignment would.
+
+The [candidate evaluation](CANDIDATE_FORECAST_EVALUATION.md) retained the weighted trend after the pooled Poisson model exceeded the city error limit at lead two. Neither model's prediction intervals met the coverage criteria. The release therefore provides point estimates for FY2026/27, FY2027/28 and FY2028/29 with `withheld_after_evaluation` and paired null bounds. The [housing audit](HOUSING_EXPOSURE_AUDIT.md) supported retaining the counts-only model. The assessment used revised historical data, so its errors describe retrospective performance.
 
 ## Review regenerated data
 
-`data-pipeline/output/manifest.json` records the sources, financial-year range and a SHA-256 for each committed CSV. CI runs `python backend/data_contract.py` (and the same checks inside pytest), so no download is needed. It checks required columns, one forecast per ward in `glasgow_wards.geojson`, annual financial-year labels for each lead (`2023/2024`, not month bins), ordered bounds, and that the CSVs still match the manifest.
+`data-pipeline/output/manifest.json` records the sources, financial-year range and a SHA-256 for each committed CSV. CI runs `python backend/data_contract.py` (and the same checks inside pytest), so no download is needed. It checks required columns, one forecast per ward in `glasgow_wards.geojson`, annual financial-year labels, compatible interval metadata, pinned provenance and CSV hashes. Pytest also regenerates the published ward CSV byte for byte.
 
 When upstream inputs change:
 
@@ -70,7 +84,7 @@ The 0–100 score is a heuristic vulnerability composite whose weights have yet 
 | `forecast_18mo` | `forecast_3yr` |
 | `forecast_lower`, `forecast_upper` | `forecast_lower_1yr`, `forecast_upper_1yr` |
 
-The regenerated CSV also includes bounds for years two and three, each projected financial year, and the first and last observed financial years. The API can read the previous CSV. It preserves the annual counts and first-step bounds and reports the later bounds as unavailable until the CSV is regenerated. See the [API migration notes](../backend/README.md#ward-projections).
+The current CSV includes each projected financial year, the first and last observed financial years, and per-year bound columns left blank under the declared interval status. The API can also read the previous CSV with its annual counts and saved first-step bounds. See the [API migration notes](../backend/README.md#ward-projections).
 
 ## Ward vulnerability lookup
 
@@ -91,7 +105,7 @@ The [housing exposure audit](HOUSING_EXPOSURE_AUDIT.md) matches observed counts 
 ## Limitations
 
 - The "Mock" source, the premises overlay and the event markers are illustrative sample data.
-- The model fits a recency-weighted linear trend to annual counts per ward. The residual range uses the point estimate ± 1.96 times the historical residual standard deviation, clipped at zero and rounded to whole counts. This describes historical fit error and has no calibrated coverage guarantee. The model has no weather, seasonality or planned-development inputs.
+- The recency-weighted linear trend uses annual dwelling-fire counts. Its inputs omit weather, seasonality and planned development.
 - Risk weights are chosen by hand and not validated against incident outcomes.
 - If a ward has no scored DataZones available, the API may report a labelled SIMD-decile proxy. In model mode, sample population, planning and incident-history properties are excluded.
 - Census 2022 and EPC data were planned but are not used.

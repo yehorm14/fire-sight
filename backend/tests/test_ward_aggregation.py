@@ -139,6 +139,6 @@ def test_ward_model_separates_last_observation_from_projection(client):
     result = client.get("/api/strategic/wards/S13002967", params={"source": "model"})
     assert result.status_code == 200
     prediction = result.json()["properties"]["prediction"]
-    assert prediction["last_observed_count"] == 36
-    assert prediction["last_financial_year"] == "2022/2023"
-    assert prediction["projections"][0]["financial_year"] == "2023/2024"
+    assert prediction["last_observed_count"] == 23
+    assert prediction["last_financial_year"] == "2025/2026"
+    assert prediction["projections"][0]["financial_year"] == "2026/2027"

@@ -55,7 +55,7 @@ The free Render tier sleeps when idle, so the first request can take about a min
 python scripts/smoke_check.py --api https://<api-host> --frontend https://<frontend-host>
 ```
 
-The check uses GET and OPTIONS requests and needs no credentials. It verifies API liveness and model readiness, the same 23 correctly labelled wards in Model and Mock, and a working ward explanation. With `--frontend`, it also checks the app shell and CORS for that origin. The script exits non-zero on failure. The explanation request uses the built-in template when live explanations are disabled.
+The check uses GET and OPTIONS requests and needs no credentials. It verifies API liveness and model readiness, the same 23 correctly labelled wards in Model and Mock, and a working ward explanation. With `--frontend`, it also checks the app shell and CORS for that origin. The script exits non-zero on failure. The explanation request uses the built-in template when live explanations are disabled. With live explanations disabled, add `--require-forecast-release` to verify that the selected ward's point forecast and release agree across the map data, ward detail and built-in explanation. The check also verifies that the release has paired null interval bounds.
 
 ## Liveness and model-data readiness
 
