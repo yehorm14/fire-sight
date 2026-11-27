@@ -46,7 +46,7 @@ WARD_COLUMNS = {
     for prefix in ("financial_year", "forecast", "forecast_lower", "forecast_upper")
 }
 
-MANIFEST_SOURCES = [
+ZONE_MANIFEST_SOURCES = [
     {
         "name": "SIMD 2020v2 population-weighted deciles",
         "publisher": "Public Health Scotland",
@@ -57,12 +57,16 @@ MANIFEST_SOURCES = [
         "publisher": "Scottish Government",
         "url": "https://www.gov.scot/publications/scottish-index-of-multiple-deprivation-2020v2-indicator-data/",
     },
-    {
-        "name": "SFRS best-fit ward dwelling-fire counts, through FY2025/26",
-        "publisher": "Scottish Fire and Rescue Service and Scottish Government",
-        "url": "https://www.firescotland.gov.uk/publications/document/?id=9990",
-    },
 ]
+BEST_FIT_MANIFEST_SOURCE = {
+    "name": "SFRS best-fit ward dwelling-fire counts, through FY2025/26",
+    "publisher": "Scottish Fire and Rescue Service and Scottish Government",
+    "url": "https://www.firescotland.gov.uk/publications/document/?id=9990",
+}
+DIRECT_MANIFEST_SOURCE = {
+    "name": "SFRS fire statistics (type of incident)",
+    "publisher": "Scottish Fire and Rescue Service via data.gov.scot",
+}
 
 
 def sha256_of(path: Path) -> str:
@@ -216,8 +220,10 @@ def check_ward_forecasts(csv_path: Path = WARD_FORECASTS_CSV, wards_file: Path =
     release_columns = set(df.columns) & WARD_RELEASE_COLUMNS
     release = read_ward_release() if release_columns else None
     if release_columns and (release_columns != WARD_RELEASE_COLUMNS or not release):
-        problems.append(f"{name} must declare all ward forecast release fields and reference a readable release")
-        return problems
+        return [f"{name} must declare all ward forecast release fields and reference a readable release"]
+    observation_source = release.get("observation_source") if release else None
+    if release and not isinstance(observation_source, dict):
+        return [f"{name} references an invalid ward forecast observation source"]
 
     if df["ward_id"].duplicated().any():
         problems.append(f"{name} has duplicate ward_id values")
@@ -229,7 +235,8 @@ def check_ward_forecasts(csv_path: Path = WARD_FORECASTS_CSV, wards_file: Path =
         if expected - got:
             problems.append(f"{name} has no forecast for wards: {', '.join(sorted(expected - got))}")
         if got - expected:
-            problems.append(f"{name} has unknown wards: {', '.join(sorted(got - expected))}")
+            unknown = sorted(str(ward) for ward in got - expected)
+            problems.append(f"{name} has unknown wards: {', '.join(unknown)}")
 
     records = df.astype(object).where(df.notna(), None)
     for row in records.to_dict(orient="records"):
@@ -247,7 +254,7 @@ def check_ward_forecasts(csv_path: Path = WARD_FORECASTS_CSV, wards_file: Path =
         if (row["first_year"], row["last_year"]) != (first, last + 1):
             problems.append(f"{ward}: first_year/last_year disagree with financial years")
         if release and any(
-            row[column] != release.get("observation_source", {}).get(column)
+            row[column] != observation_source.get(column)
             for column in ("first_financial_year", "last_financial_year")
         ):
             problems.append(f"{ward}: observed periods do not match the ward forecast release")
@@ -297,6 +304,8 @@ def build_manifest() -> Dict[str, Any]:
 
     wf = pd.read_csv(WARD_FORECASTS_CSV)
     zones = pd.read_csv(ZONES_CSV)
+    versioned = "forecast_release_id" in wf
+    ward_source = BEST_FIT_MANIFEST_SOURCE if versioned else DIRECT_MANIFEST_SOURCE
     manifest = {
         "generated_by": "data-pipeline/run_model.py",
         "period_unit": "financial_year",
@@ -307,7 +316,7 @@ def build_manifest() -> Dict[str, Any]:
         "projected_financial_years": sorted(
             {fy for lead in HORIZON_LEADS for fy in wf[f"financial_year_{lead}yr"]}
         ),
-        "sources": MANIFEST_SOURCES,
+        "sources": [*ZONE_MANIFEST_SOURCES, ward_source],
         "zone_model": {
             "version": 2,
             "score_type": "heuristic vulnerability composite",
@@ -319,7 +328,7 @@ def build_manifest() -> Dict[str, Any]:
             for p, df in ((WARD_FORECASTS_CSV, wf), (ZONES_CSV, zones))
         },
     }
-    if "forecast_release_id" in wf:
+    if versioned:
         manifest["ward_forecast_release"] = read_ward_release()
     return manifest
 
@@ -335,6 +344,8 @@ def check_manifest(
         return [f"missing provenance manifest: {manifest_path.name}"]
     try:
         manifest = json.loads(manifest_path.read_text())
+    except OSError as exc:
+        return [f"cannot read provenance manifest {manifest_path.name}: {exc}"]
     except ValueError as exc:
         return [f"{manifest_path.name} is not valid JSON: {exc}"]
     if not isinstance(manifest, dict):
@@ -349,15 +360,23 @@ def check_manifest(
     if not isinstance(entries, dict):
         return [*problems, "manifest files must contain a JSON object"]
     for path in expected_files:
-        if path.name == WARD_FORECASTS_CSV.name and path.exists():
-            with path.open(newline="") as handle:
-                columns = set(csv.DictReader(handle).fieldnames or [])
-            if bool(WARD_RELEASE_COLUMNS & columns) != (release is not None):
-                problems.append("manifest and forecast CSV disagree on ward forecast release metadata")
         entry = entries.get(path.name)
         if not isinstance(entry, dict):
             problems.append(f"manifest has no entry for {path.name}")
-        elif path.exists() and entry.get("sha256") != sha256_of(path):
+            continue
+        if not path.exists():
+            continue
+        try:
+            if path.name == WARD_FORECASTS_CSV.name:
+                with path.open(newline="", encoding="utf-8") as handle:
+                    columns = set(csv.DictReader(handle).fieldnames or [])
+                if bool(WARD_RELEASE_COLUMNS & columns) != (release is not None):
+                    problems.append("manifest and forecast CSV disagree on ward forecast release metadata")
+            digest = sha256_of(path)
+        except (OSError, UnicodeError, csv.Error):
+            problems.append(f"cannot read committed artifact: {path.name}")
+            continue
+        if entry.get("sha256") != digest:
             problems.append(
                 f"{path.name} changed since the manifest was written; review the diff then run "
                 "`python backend/data_contract.py --write-manifest`"

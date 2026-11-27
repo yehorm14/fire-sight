@@ -51,6 +51,19 @@ def test_missing_ward_is_reported(data_copy):
     assert any("no forecast for wards" in p for p in dc.check_ward_forecasts(csv))
 
 
+def test_blank_ward_id_is_reported(data_copy):
+    csv = data_copy / dc.WARD_FORECASTS_CSV.name
+    csv.write_text(csv.read_text().replace("S13002967,", ",", 1))
+    assert any("unknown wards" in problem for problem in dc.check_ward_forecasts(csv))
+
+
+def test_unreadable_forecast_header_is_reported(data_copy):
+    csv = data_copy / dc.WARD_FORECASTS_CSV.name
+    csv.write_bytes(b"\xff")
+    problems = dc.check_manifest(data_copy / dc.MANIFEST_JSON.name, [csv])
+    assert f"cannot read committed artifact: {csv.name}" in problems
+
+
 def test_legacy_annual_csv_requires_ordered_numeric_bounds(data_copy):
     import pandas as pd
 
@@ -100,6 +113,21 @@ def test_release_degrades_when_pinned_source_is_missing(client, monkeypatch, tmp
     response = client.get("/api/ready")
     assert response.status_code == 503
     assert any("ward observation input: cannot read" in problem for problem in response.json()["problems"])
+
+
+def test_malformed_observation_source_reports_degraded_readiness(client, monkeypatch, tmp_path):
+    release = dc.read_ward_release()
+    release["observation_source"] = None
+    release_path = tmp_path / dc.WARD_RELEASE_JSON.name
+    release_path.write_text(dc.json.dumps(release))
+    monkeypatch.setattr(dc, "WARD_RELEASE_JSON", release_path)
+
+    assert dc.check_ward_forecasts() == [
+        f"{dc.WARD_FORECASTS_CSV.name} references an invalid ward forecast observation source",
+    ]
+    response = client.get("/api/ready")
+    assert response.status_code == 503
+    assert any("invalid ward forecast observation source" in problem for problem in response.json()["problems"])
 
 
 def test_manifest_detects_changed_release_metadata(data_copy):
