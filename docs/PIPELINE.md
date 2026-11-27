@@ -84,6 +84,10 @@ python data-pipeline/build_ward_lookup.py '/path/to/SIMD 2020v2 - datazone looku
 
 Each DataZone is assigned to one ward by the published lookup. The ward explorer uses the workbook’s `DZname` field with the stable 2011 DataZone code. The ward vulnerability score is the population-weighted mean of its assigned DataZone scores, with an unweighted mean when the ward has no positive population weights. Drivers use population-weighted frequency of the assigned DataZones' model drivers. The API reports unmatched zones and wards without scored zones at startup.
 
+## Housing evidence
+
+The [housing exposure audit](HOUSING_EXPOSURE_AUDIT.md) matches observed counts to dwelling stock, checks when each release was available, and records why the exploratory findings stay outside production forecasts.
+
 ## Limitations
 
 - The "Mock" source, the premises overlay and the event markers are illustrative sample data.
