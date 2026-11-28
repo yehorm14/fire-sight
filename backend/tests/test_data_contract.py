@@ -26,6 +26,20 @@ def data_copy(tmp_path):
     return tmp_path
 
 
+def test_load_ward_forecasts_validates_the_release_with_its_rows(data_copy):
+    csv = data_copy / dc.WARD_FORECASTS_CSV.name
+    manifest = data_copy / dc.MANIFEST_JSON.name
+    result = main.load_ward_forecasts(csv, dc.WARDS_FILE, manifest)
+    assert len(result.rows) == 23
+    assert result.release == dc.json.loads(manifest.read_text())["ward_forecast_release"]
+    assert all(dc.release_row_matches(row, result.release) for row in result.rows.values())
+    assert result.release_problems == []
+
+    csv.write_text(csv.read_text().replace(result.release["release_id"], "different_release", 1))
+    mismatch = main.load_ward_forecasts(csv, dc.WARDS_FILE, manifest)
+    assert any("interval metadata is invalid" in problem for problem in mismatch.release_problems)
+
+
 def test_missing_forecast_file_is_reported(tmp_path):
     problems = dc.check_ward_forecasts(tmp_path / "glasgow_ward_forecasts.csv")
     assert problems == ["missing required file: glasgow_ward_forecasts.csv"]

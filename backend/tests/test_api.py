@@ -194,8 +194,7 @@ def test_legacy_ward_csv_has_only_the_saved_range(client, monkeypatch, tmp_path)
         "forecast_lower,forecast_upper\n"
         "S13002967,2009,2023,14,30,29,28,11,49\n"
     )
-    monkeypatch.setattr(main, "WARD_FORECASTS_CSV", old_csv)
-    monkeypatch.setattr(main, "ward_forecasts", main.load_ward_forecasts())
+    monkeypatch.setattr(main, "ward_forecast_data", main.load_ward_forecasts(old_csv, main.WARDS_FILE))
     ward = client.get("/api/strategic/wards/S13002967", params={"source": "model"}).json()
     first, second, third = ward["properties"]["prediction"]["projections"]
     assert first == {"lead": 1, "financial_year": "2023/2024", "forecast": 30, "lower": 11, "upper": 49}
@@ -454,7 +453,7 @@ def test_model_unavailable_is_503_never_sample_data(client, monkeypatch):
 def test_missing_ward_forecasts_are_unavailable(client, monkeypatch):
     import main
 
-    monkeypatch.setattr(main, "ward_forecasts", {})
+    monkeypatch.setattr(main.ward_forecast_data, "rows", {})
     for url, extra in _all_source_urls():
         assert client.get(url, params={**extra, "source": "model"}).status_code == 503, url
 
@@ -462,8 +461,8 @@ def test_missing_ward_forecasts_are_unavailable(client, monkeypatch):
 def test_partial_forecasts_fail_collection_but_serve_covered_ward(client, monkeypatch):
     import main
 
-    only_govan = {GOVAN: main.ward_forecasts[GOVAN]}
-    monkeypatch.setattr(main, "ward_forecasts", only_govan)
+    only_govan = {GOVAN: main.ward_forecast_data.rows[GOVAN]}
+    monkeypatch.setattr(main.ward_forecast_data, "rows", only_govan)
     res = client.get("/api/strategic/wards.geojson", params={"source": "model"})
     assert res.status_code == 503
     assert "no ward forecast for" in res.json()["detail"]["reasons"][0]
@@ -527,7 +526,7 @@ def test_explain_reports_the_source_that_supplies_the_record(client):
 def test_empty_forecast_row_is_unavailable(client, monkeypatch):
     import main
 
-    monkeypatch.setitem(main.ward_forecasts, GOVAN, {"ward_id": GOVAN})
+    monkeypatch.setitem(main.ward_forecast_data.rows, GOVAN, {"ward_id": GOVAN})
     for url, extra in _all_source_urls():
         response = client.get(url, params={**extra, "source": "model"})
         assert response.status_code == 503, url
@@ -546,7 +545,7 @@ def test_empty_forecast_row_is_unavailable(client, monkeypatch):
 def test_only_usable_ward_projection_leads_can_be_requested(client, monkeypatch, field, value):
     import main
 
-    monkeypatch.setitem(main.ward_forecasts[GOVAN], field, value)
+    monkeypatch.setitem(main.ward_forecast_data.rows[GOVAN], field, value)
     params = {"mode": "ward", "id": GOVAN, "source": "model"}
     assert client.get("/api/explain", params={**params, "lead": 0}).status_code == 200
     assert client.get("/api/explain", params=params).status_code == 200
