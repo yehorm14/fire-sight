@@ -20,4 +20,5 @@ import main  # noqa: E402
 
 @pytest.fixture(scope="session")
 def client():
-    return TestClient(main.app)
+    with TestClient(main.app) as test_client:
+        yield test_client

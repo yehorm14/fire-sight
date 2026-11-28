@@ -7,11 +7,12 @@ import os
 import threading
 import time
 from collections import OrderedDict, defaultdict
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +23,7 @@ except ImportError:
     load_dotenv = None
 
 logger = logging.getLogger("uvicorn.error")
-app = FastAPI()
+router = APIRouter()
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -54,15 +55,6 @@ def resolve_cors_origins() -> List[str]:
             DEFAULT_CORS_ORIGINS,
         )
     return [o.strip() for o in (raw or DEFAULT_CORS_ORIGINS).split(",") if o.strip()]
-
-
-cors_origins = resolve_cors_origins()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_methods=["GET"],
-    allow_headers=["*"],
-)
 
 
 def load_wards():
@@ -132,6 +124,8 @@ class WardForecastData:
     rows: Dict[str, Dict[str, Any]]
     release: Optional[Dict[str, Any]]
     release_problems: List[str]
+    readiness_problems: List[str]
+    source_version: Optional[str] = None
 
 
 def _load_ward_forecast_rows(csv_path: Path) -> Dict[str, Dict[str, Any]]:
@@ -157,21 +151,20 @@ def load_ward_forecasts(
     csv_path: Path,
     wards_file: Path,
     manifest_path: Path = data_contract.MANIFEST_JSON,
+    *,
+    release_path: Optional[Path] = None,
 ) -> WardForecastData:
     """Load forecasts and validate the release declared by the CSV."""
     rows = _load_ward_forecast_rows(csv_path)
-    release = data_contract.read_ward_release()
-    release_problems = []
-    if any(data_contract.WARD_RELEASE_COLUMNS & row.keys() for row in rows.values()):
-        release_problems = data_contract.check_ward_forecasts(csv_path, wards_file)
-        release_problems += data_contract.check_manifest(manifest_path, [csv_path], wards_file)
-    return WardForecastData(rows, release, release_problems)
+    release = data_contract.read_ward_release(release_path)
+    problems = data_contract.check_ward_forecasts(csv_path, wards_file, release_path=release_path)
+    problems += data_contract.check_manifest(manifest_path, [csv_path], wards_file, release_path=release_path)
+    declares_release = any(data_contract.WARD_RELEASE_COLUMNS & row.keys() for row in rows.values())
+    return WardForecastData(rows, release, problems if declares_release else [], problems)
 
 
 zones: List[Dict[str, Any]] = load_zones()
 zones_by_id: Dict[str, Dict[str, Any]] = {z["zoneid"]: z for z in zones}
-ward_forecast_data = load_ward_forecasts(WARD_FORECASTS_CSV, WARDS_FILE)
-
 
 def build_decile_lookup(zone_list: List[Dict[str, Any]]) -> Dict[int, int]:
     """Map each SIMD decile (1-10) to the mean model risk score for zones in that decile."""
@@ -244,9 +237,6 @@ def model_ward_props(props) -> Dict[str, Any]:
     """Ward properties for model mode, without the sample (non-model) fields."""
     kept = {k: v for k, v in props.items() if k not in SAMPLE_WARD_PROPS}
     return {**kept, **ward_model_provenance(props)}
-
-app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
-
 
 def risk_band(score):
     if score >= 75:
@@ -344,7 +334,7 @@ def last_observed_count(row):
     return count if isinstance(count, (int, float)) and math.isfinite(count) and count >= 0 else None
 
 
-def annual_ward_prediction(row):
+def annual_ward_prediction(row, ward_forecast_data: WardForecastData):
     """Read either regenerated annual columns or the original mislabeled annual CSV."""
     first, last, years = (row.get(key) for key in ("first_year", "last_year", "years_of_data"))
     first_period = row.get("first_financial_year") or (f"{first}/{first + 1}" if isinstance(first, int) else None)
@@ -459,13 +449,15 @@ def projection_text(prediction, lead):
 SOURCES = ("mock", "model")
 
 
-def model_source_version() -> Optional[str]:
+def model_source_version(
+    ward_forecast_data: WardForecastData, csv_path: Path, release_path: Path,
+) -> Optional[str]:
     """Fingerprint the model inputs once, alongside loading them at startup."""
     paths = [ZONES_CSV]
     if ward_forecast_data.rows:
-        paths.append(WARD_FORECASTS_CSV)
+        paths.append(csv_path)
     if ward_forecast_data.release and not ward_forecast_data.release_problems:
-        paths.append(data_contract.WARD_RELEASE_JSON)
+        paths.append(release_path)
     if wards_by_id:
         paths.append(WARDS_FILE)
     if ward_lookup is not None:
@@ -479,17 +471,16 @@ def model_source_version() -> Optional[str]:
         return None
 
 
-MODEL_SOURCE_VERSION = model_source_version()
-
-
 def model_unavailable_reasons(
-    ward_ids: Optional[List[str]] = None, lead: Optional[int] = None
+    ward_forecast_data: WardForecastData,
+    ward_ids: Optional[List[str]] = None,
+    lead: Optional[int] = None,
 ) -> List[str]:
     """Why the requested model result cannot be served right now."""
     reasons = []
     if not zones:
         reasons.append("DataZone scores are not loaded")
-    elif MODEL_SOURCE_VERSION is None:
+    elif ward_forecast_data.source_version is None:
         reasons.append("model source version is unavailable")
     if ward_ids is None:
         return reasons
@@ -515,7 +506,7 @@ def model_unavailable_reasons(
     required_leads = set(data_contract.HORIZON_LEADS if lead is None else (lead,))
     missing_forecasts = []
     for ward_id in ward_ids:
-        prediction = annual_ward_prediction(ward_forecast_data.rows.get(ward_id, {}))
+        prediction = annual_ward_prediction(ward_forecast_data.rows.get(ward_id, {}), ward_forecast_data)
         available_leads = {step["lead"] for step in prediction["projections"]}
         if not required_leads.issubset(available_leads):
             missing_forecasts.append(ward_id)
@@ -528,6 +519,7 @@ def model_unavailable_reasons(
 
 def resolve_source(
     source: str,
+    ward_forecast_data: WardForecastData,
     ward_ids: Optional[List[str]] = None,
     *,
     mode: Optional[str] = None,
@@ -546,7 +538,7 @@ def resolve_source(
         return {"data_source": "mock", "source_version": "sample"}
     reasons = (
         ["premises are available as sample data only"]
-        if mode == "premises" else model_unavailable_reasons(ward_ids, lead)
+        if mode == "premises" else model_unavailable_reasons(ward_forecast_data, ward_ids, lead)
     )
     if reasons:
         raise HTTPException(
@@ -557,16 +549,16 @@ def resolve_source(
                 "reasons": reasons,
             },
         )
-    return {"data_source": "model", "source_version": MODEL_SOURCE_VERSION}
+    return {"data_source": "model", "source_version": ward_forecast_data.source_version}
 
 
-def ward_with_prediction(feature, use_model: bool = False):
+def ward_with_prediction(feature, ward_forecast_data: WardForecastData, *, use_model: bool):
     props = feature["properties"]
 
     if use_model:
         model_score = ward_model_score(props)
         wf = ward_forecast_data.rows.get(props["ward_id"], {})
-        model_prediction = annual_ward_prediction(wf)
+        model_prediction = annual_ward_prediction(wf, ward_forecast_data)
         return {
             **feature,
             "properties": {
@@ -639,7 +631,7 @@ def fallback_ward_explanation(feature, lead=6):
     )
 
 
-def fallback_ward_explanation_model(feature, lead=1, prediction=None):
+def fallback_ward_explanation_model(feature, lead, prediction):
     props = feature["properties"]
     decile = props.get("simd_decile")
     model_score = ward_model_score(props)
@@ -654,8 +646,6 @@ def fallback_ward_explanation_model(feature, lead=1, prediction=None):
     )
     priority = "high" if band == "high" else "near-term" if band == "medium" else "routine"
 
-    if prediction is None:
-        prediction = annual_ward_prediction(ward_forecast_data.rows.get(props["ward_id"], {}))
     if lead == 0 or selected_projection(prediction, lead):
         capacity_line = projection_text(prediction, lead)
         key_line = (
@@ -734,7 +724,7 @@ def fallback_zone_explanation(zone: Dict[str, Any]) -> str:
     )
 
 
-def _ai_context(mode, record, source: str = "mock", lead: Optional[int] = None) -> str:
+def _ai_context(mode, record, source: str, lead: Optional[int], ward_prediction) -> str:
     """Build the minimal one-line context string sent to OpenAI."""
     if mode == "ward":
         props = record["properties"]
@@ -742,11 +732,10 @@ def _ai_context(mode, record, source: str = "mock", lead: Optional[int] = None) 
         d = ", ".join(drivers[:2]) or "deprivation"
         if source == "model":
             decile = props.get("simd_decile", "?")
-            wf = ward_forecast_data.rows.get(props["ward_id"], {})
             score = ward_model_score(props)
             d = ", ".join(ward_model_provenance(props)["drivers"][:2]) or "deprivation"
             band = risk_band(score)
-            forecast = projection_text(annual_ward_prediction(wf), 1 if lead is None else lead)
+            forecast = projection_text(ward_prediction, 1 if lead is None else lead)
             return f"Ward: {props['ward_name']} | Risk: {score}/100 ({band}) | SIMD decile: {decile} | Drivers: {d} | {forecast}"
         score = props["risk_score"]
         forecast = projection_text(prediction_for(record), 6 if lead is None else lead)
@@ -875,7 +864,7 @@ def _release_provider_slot(cache_key: tuple) -> None:
 
 def openai_explanation(
     mode: str, record, *, source: str, source_version: str, lead: Optional[int],
-    record_id: str, client_id: str,
+    record_id: str, client_id: str, ward_prediction=None,
 ):
     if not live_explanations_enabled():
         return None
@@ -891,7 +880,7 @@ def openai_explanation(
     except ImportError:
         return None
 
-    context = _ai_context(mode, record, source, lead)
+    context = _ai_context(mode, record, source, lead, ward_prediction)
     system_prompt = (
         "UK fire service analyst. Given area risk data, write exactly 3 bullet points (•) covering: "
         "(1) where to target prevention activity, (2) how to plan capacity from the forecast, "
@@ -922,22 +911,23 @@ def openai_explanation(
         _release_provider_slot(cache_key)
 
 
-@app.get("/")
+@router.get("/")
 def read_root():
     return {"message": "FireSight backend is running"}
 
 
-def readiness_report() -> Dict[str, Any]:
+def readiness_report(ward_forecast_data: WardForecastData, manifest_path: Path) -> Dict[str, Any]:
     """Model-data readiness, separate from liveness (/api/health).
 
     mode is "model" when data is healthy, "mock" when mock mode was deliberately
     enabled, and "degraded" when model data failed to load or validate.
     """
-    problems = (
-        data_contract.check_ward_forecasts(WARD_FORECASTS_CSV, WARDS_FILE)
-        + data_contract.check_zones(ZONES_CSV)
-        + data_contract.check_manifest(files=[WARD_FORECASTS_CSV, ZONES_CSV], wards_file=WARDS_FILE)
-    )
+    problems = [
+        *ward_forecast_data.readiness_problems,
+        *data_contract.check_zones(ZONES_CSV),
+        *data_contract.check_manifest(manifest_path, [ZONES_CSV], validate_ward_release=False),
+    ]
+    problems = list(dict.fromkeys(problems))
     if not problems and not ward_forecast_data.rows:
         problems.append("ward forecasts were not loaded into the API")
     if not problems and not zones:
@@ -952,14 +942,14 @@ def readiness_report() -> Dict[str, Any]:
     }
 
 
-@app.get("/api/ready")
-def ready():
+@router.get("/api/ready")
+def ready(request: Request):
     """Readiness: 200 when model data is valid or mock mode is on, 503 when model data failed."""
-    report = readiness_report()
+    report = readiness_report(request.app.state.ward_forecasts, request.app.state.manifest_path)
     return JSONResponse(report, status_code=200 if report["ready"] else 503)
 
 
-@app.get("/api/health")
+@router.get("/api/health")
 def health():
     """Liveness only: the process is up. Use /api/ready for model-data readiness."""
     return {
@@ -971,20 +961,21 @@ def health():
     }
 
 
-def model_projection_periods():
+def model_projection_periods(ward_forecast_data: WardForecastData):
     periods = defaultdict(set)
     for row in ward_forecast_data.rows.values():
-        for step in annual_ward_prediction(row)["projections"]:
+        for step in annual_ward_prediction(row, ward_forecast_data)["projections"]:
             years = periods[step["lead"]]
             if step["financial_year"]:
                 years.add(step["financial_year"])
     return periods
 
 
-@app.get("/api/status")
-def api_status():
+@router.get("/api/status")
+def api_status(request: Request):
+    ward_forecast_data = request.app.state.ward_forecasts
     n_components = max((z.get("n_score_components") or 0 for z in zones), default=0)
-    periods = model_projection_periods()
+    periods = model_projection_periods(ward_forecast_data)
     release_active = periods and not ward_forecast_data.release_problems and any(
         data_contract.release_row_matches(row, ward_forecast_data.release)
         for row in ward_forecast_data.rows.values()
@@ -1001,11 +992,11 @@ def api_status():
         ],
         "model_components_active": n_components,
         "model_components_total": 5,
-        "data_mode": readiness_report()["mode"],
+        "data_mode": readiness_report(ward_forecast_data, request.app.state.manifest_path)["mode"],
     }
 
 
-@app.get("/api/modes")
+@router.get("/api/modes")
 def modes():
     return {
         "modes": [
@@ -1026,14 +1017,15 @@ def modes():
     }
 
 
-@app.get("/api/strategic/wards")
-def list_strategic_wards(source: str = "mock"):
-    resolved = resolve_source(source, list(wards_by_id))
+@router.get("/api/strategic/wards")
+def list_strategic_wards(request: Request, source: str = "mock"):
+    ward_forecast_data = request.app.state.ward_forecasts
+    resolved = resolve_source(source, ward_forecast_data, list(wards_by_id))
     if resolved["data_source"] == "mock":
         return [{**ward_summary(feature), **resolved} for feature in wards_geojson.get("features", [])]
     summaries = []
     for feature in wards_geojson.get("features", []):
-        props = ward_with_prediction(feature, use_model=True)["properties"]
+        props = ward_with_prediction(feature, ward_forecast_data, use_model=True)["properties"]
         summaries.append({
             "id": props["id"],
             "name": props["name"],
@@ -1052,40 +1044,42 @@ def list_strategic_wards(source: str = "mock"):
     return summaries
 
 
-@app.get("/api/strategic/wards.geojson")
-def get_strategic_wards_geojson(source: str = "mock"):
-    resolved = resolve_source(source, list(wards_by_id))
+@router.get("/api/strategic/wards.geojson")
+def get_strategic_wards_geojson(request: Request, source: str = "mock"):
+    ward_forecast_data = request.app.state.ward_forecasts
+    resolved = resolve_source(source, ward_forecast_data, list(wards_by_id))
     use_model = resolved["data_source"] == "model"
     return {
         **wards_geojson,
         **resolved,
         "features": [
-            ward_with_prediction(feature, use_model=use_model)
+            ward_with_prediction(feature, ward_forecast_data, use_model=use_model)
             for feature in wards_geojson.get("features", [])
         ],
     }
 
 
-@app.get("/api/strategic/wards/{ward_id}")
-def get_strategic_ward(ward_id: str, source: str = "mock"):
+@router.get("/api/strategic/wards/{ward_id}")
+def get_strategic_ward(request: Request, ward_id: str, source: str = "mock"):
+    ward_forecast_data = request.app.state.ward_forecasts
     ward = wards_by_id.get(ward_id)
     if ward is None:
         raise HTTPException(status_code=404, detail="Ward not found")
-    resolved = resolve_source(source, [ward_id])
-    result = ward_with_prediction(ward, use_model=resolved["data_source"] == "model")
+    resolved = resolve_source(source, ward_forecast_data, [ward_id])
+    result = ward_with_prediction(ward, ward_forecast_data, use_model=resolved["data_source"] == "model")
     result["properties"]["source_version"] = resolved["source_version"]
     return result
 
 
-@app.get("/api/strategic/wards/{ward_id}/zones")
-def list_ward_zones(ward_id: str):
+@router.get("/api/strategic/wards/{ward_id}/zones")
+def list_ward_zones(request: Request, ward_id: str):
     """Serve scored 2011 DataZones assigned to this ward by the official lookup."""
     if ward_id not in wards_by_id:
         raise HTTPException(status_code=404, detail="Ward not found")
     if ward_lookup is None:
         raise HTTPException(status_code=503, detail="DataZone-to-ward lookup is unavailable")
 
-    resolved = resolve_source("model")
+    resolved = resolve_source("model", request.app.state.ward_forecasts)
     mapping = ward_lookup["mapping"]
     names = ward_lookup["names"]
     members = [
@@ -1107,7 +1101,7 @@ def list_ward_zones(ward_id: str):
     }
 
 
-@app.get("/api/premises")
+@router.get("/api/premises")
 def list_premises(
     focus: Optional[str] = None,
     ward_id: Optional[str] = None,
@@ -1120,7 +1114,7 @@ def list_premises(
     )
 
 
-@app.get("/api/premises/{premises_id}")
+@router.get("/api/premises/{premises_id}")
 def get_premises(premises_id: str):
     item = premises_by_id.get(premises_id)
     if item is None:
@@ -1129,7 +1123,7 @@ def get_premises(premises_id: str):
     return item
 
 
-@app.get("/api/explain")
+@router.get("/api/explain")
 def explain(
     request: Request,
     mode: str,
@@ -1140,7 +1134,9 @@ def explain(
     if source is None:
         source = "model" if mode == "zone" else "mock"
 
+    ward_forecast_data = request.app.state.ward_forecasts
     provider_lead = None
+    prediction = None
     forecast_fields = {}
     can_use_provider = True
     if mode == "ward":
@@ -1148,9 +1144,9 @@ def explain(
         if record is None:
             raise HTTPException(status_code=404, detail="Ward not found")
         provider_lead = lead if lead is not None else (1 if source == "model" else 6)
-        resolved = resolve_source(source, [record_id], lead=provider_lead)
+        resolved = resolve_source(source, ward_forecast_data, [record_id], lead=provider_lead)
         if resolved["data_source"] == "model":
-            prediction = annual_ward_prediction(ward_forecast_data.rows.get(record_id, {}))
+            prediction = annual_ward_prediction(ward_forecast_data.rows.get(record_id, {}), ward_forecast_data)
             fallback = fallback_ward_explanation_model(record, provider_lead, prediction)
             if provider_lead and prediction.get("forecast_release"):
                 forecast_fields = {
@@ -1163,7 +1159,7 @@ def explain(
                 provider_lead == 0 or selected_projection(prediction_for(record), provider_lead) is not None
             )
     elif mode == "zone":
-        resolved = resolve_source(source, mode=mode)
+        resolved = resolve_source(source, ward_forecast_data, mode=mode)
         record = zones_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Zone not found")
@@ -1172,7 +1168,7 @@ def explain(
         record = premises_by_id.get(record_id)
         if record is None:
             raise HTTPException(status_code=404, detail="Premises not found")
-        resolved = resolve_source(source, mode=mode)
+        resolved = resolve_source(source, ward_forecast_data, mode=mode)
         fallback = fallback_premises_explanation(record)
     else:
         raise HTTPException(status_code=400, detail="Mode must be 'ward', 'zone', or 'premises'")
@@ -1180,7 +1176,7 @@ def explain(
     live_text = (
         openai_explanation(
             mode, record, source=resolved["data_source"], source_version=resolved["source_version"],
-            lead=provider_lead, record_id=record_id,
+            lead=provider_lead, record_id=record_id, ward_prediction=prediction,
             client_id=request.client.host if request.client else "unknown",
         )
         if can_use_provider else None
@@ -1200,7 +1196,7 @@ def explain(
 # The notebook produces this file; the API serves precomputed results only.
 # ---------------------------------------------------------------------------
 
-@app.get("/api/zones")
+@router.get("/api/zones")
 def list_zones(top: Optional[int] = None):
     """
     Return all 746 Glasgow DataZones with risk scores, drivers, and forecasts.
@@ -1215,7 +1211,7 @@ def list_zones(top: Optional[int] = None):
     return result
 
 
-@app.get("/api/zones/top")
+@router.get("/api/zones/top")
 def top_zones(n: int = 20):
     """Return the N highest-risk DataZones (default 20)."""
     if not zones:
@@ -1224,10 +1220,41 @@ def top_zones(n: int = 20):
     return sorted(zones, key=lambda z: z.get("riskrank") or 9999)[:n]
 
 
-@app.get("/api/zones/{zoneid}")
+@router.get("/api/zones/{zoneid}")
 def get_zone(zoneid: str):
     """Return a single DataZone by its S01xxxxxx identifier."""
     zone = zones_by_id.get(zoneid)
     if zone is None:
         raise HTTPException(status_code=404, detail="Zone not found")
     return zone
+
+
+def create_app(
+    *,
+    ward_forecasts_csv: Path = WARD_FORECASTS_CSV,
+    ward_release_path: Path = data_contract.WARD_RELEASE_JSON,
+    manifest_path: Path = data_contract.MANIFEST_JSON,
+) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        data = load_ward_forecasts(
+            ward_forecasts_csv, WARDS_FILE, manifest_path, release_path=ward_release_path,
+        )
+        data.source_version = model_source_version(data, ward_forecasts_csv, ward_release_path)
+        app.state.ward_forecasts = data
+        app.state.manifest_path = manifest_path
+        yield
+
+    app = FastAPI(lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=resolve_cors_origins(),
+        allow_methods=["GET"],
+        allow_headers=["*"],
+    )
+    app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
+    app.include_router(router)
+    return app
+
+
+app = create_app()
