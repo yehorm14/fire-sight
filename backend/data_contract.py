@@ -88,9 +88,9 @@ def is_whole_count(value: Any) -> bool:
     return is_nonnegative_count(value) and value == int(value)
 
 
-def read_ward_release() -> Optional[Dict[str, Any]]:
+def read_ward_release(path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
     try:
-        release = json.loads(WARD_RELEASE_JSON.read_text())
+        release = json.loads((path if path is not None else WARD_RELEASE_JSON).read_text())
     except (OSError, ValueError):
         return None
     return release if isinstance(release, dict) else None
@@ -206,7 +206,12 @@ def _ward_ids(wards_file: Path) -> List[str]:
     return [f["properties"]["ward_id"] for f in data.get("features", [])]
 
 
-def check_ward_forecasts(csv_path: Path = WARD_FORECASTS_CSV, wards_file: Path = WARDS_FILE) -> List[str]:
+def check_ward_forecasts(
+    csv_path: Path = WARD_FORECASTS_CSV,
+    wards_file: Path = WARDS_FILE,
+    *,
+    release_path: Optional[Path] = None,
+) -> List[str]:
     problems: List[str] = []
     df = _read_csv(csv_path, problems)
     if df is None:
@@ -218,7 +223,7 @@ def check_ward_forecasts(csv_path: Path = WARD_FORECASTS_CSV, wards_file: Path =
         return problems
 
     release_columns = set(df.columns) & WARD_RELEASE_COLUMNS
-    release = read_ward_release() if release_columns else None
+    release = read_ward_release(release_path) if release_columns else None
     if release_columns and (release_columns != WARD_RELEASE_COLUMNS or not release):
         return [f"{name} must declare all ward forecast release fields and reference a readable release"]
     observation_source = release.get("observation_source") if release else None
@@ -337,6 +342,9 @@ def check_manifest(
     manifest_path: Path = MANIFEST_JSON,
     files: Optional[List[Path]] = None,
     wards_file: Path = WARDS_FILE,
+    *,
+    release_path: Optional[Path] = None,
+    validate_ward_release: bool = True,
 ) -> List[str]:
     """Provenance: the manifest must exist, name its sources and match the committed files."""
     problems: List[str] = []
@@ -381,8 +389,8 @@ def check_manifest(
                 f"{path.name} changed since the manifest was written; review the diff then run "
                 "`python backend/data_contract.py --write-manifest`"
             )
-    if release is not None:
-        expected = read_ward_release()
+    if validate_ward_release and release is not None:
+        expected = read_ward_release(release_path)
         if release != expected:
             problems.append("manifest ward forecast release differs from the versioned release definition")
         release_problems = check_ward_release_inputs(expected, wards_file)

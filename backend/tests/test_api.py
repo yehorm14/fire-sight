@@ -185,7 +185,7 @@ def test_model_projection_dates_and_legacy_client_aliases(client):
     assert "20 dwelling fires projected for FY 2028/2029" in explain["text"]
 
 
-def test_legacy_ward_csv_has_only_the_saved_range(client, monkeypatch, tmp_path):
+def test_legacy_ward_csv_has_only_the_saved_range(tmp_path):
     import main
 
     old_csv = tmp_path / "legacy.csv"
@@ -194,8 +194,10 @@ def test_legacy_ward_csv_has_only_the_saved_range(client, monkeypatch, tmp_path)
         "forecast_lower,forecast_upper\n"
         "S13002967,2009,2023,14,30,29,28,11,49\n"
     )
-    monkeypatch.setattr(main, "ward_forecast_data", main.load_ward_forecasts(old_csv, main.WARDS_FILE))
-    ward = client.get("/api/strategic/wards/S13002967", params={"source": "model"}).json()
+    from fastapi.testclient import TestClient
+
+    with TestClient(main.create_app(ward_forecasts_csv=old_csv)) as legacy_client:
+        ward = legacy_client.get("/api/strategic/wards/S13002967", params={"source": "model"}).json()
     first, second, third = ward["properties"]["prediction"]["projections"]
     assert first == {"lead": 1, "financial_year": "2023/2024", "forecast": 30, "lower": 11, "upper": 49}
     assert second["financial_year"] == "2024/2025" and second["lower"] is None
@@ -348,12 +350,10 @@ def test_slot_released_after_provider_error(client, monkeypatch):
 
 
 def test_cache_key_includes_data_version_and_model(client, monkeypatch):
-    import main
-
     _use_fake_openai(monkeypatch)
     url = f"/api/explain?mode=ward&id={GOVAN}&source=model&lead=1"
     client.get(url)
-    monkeypatch.setattr(main, "MODEL_SOURCE_VERSION", "other-data")
+    monkeypatch.setattr(client.app.state.ward_forecasts, "source_version", "other-data")
     client.get(url)
     assert _FakeOpenAI.calls == 2
     monkeypatch.setenv("OPENAI_MODEL", "other-model")
@@ -451,18 +451,14 @@ def test_model_unavailable_is_503_never_sample_data(client, monkeypatch):
 
 
 def test_missing_ward_forecasts_are_unavailable(client, monkeypatch):
-    import main
-
-    monkeypatch.setattr(main.ward_forecast_data, "rows", {})
+    monkeypatch.setattr(client.app.state.ward_forecasts, "rows", {})
     for url, extra in _all_source_urls():
         assert client.get(url, params={**extra, "source": "model"}).status_code == 503, url
 
 
 def test_partial_forecasts_fail_collection_but_serve_covered_ward(client, monkeypatch):
-    import main
-
-    only_govan = {GOVAN: main.ward_forecast_data.rows[GOVAN]}
-    monkeypatch.setattr(main.ward_forecast_data, "rows", only_govan)
+    only_govan = {GOVAN: client.app.state.ward_forecasts.rows[GOVAN]}
+    monkeypatch.setattr(client.app.state.ward_forecasts, "rows", only_govan)
     res = client.get("/api/strategic/wards.geojson", params={"source": "model"})
     assert res.status_code == 503
     assert "no ward forecast for" in res.json()["detail"]["reasons"][0]
@@ -526,7 +522,7 @@ def test_explain_reports_the_source_that_supplies_the_record(client):
 def test_empty_forecast_row_is_unavailable(client, monkeypatch):
     import main
 
-    monkeypatch.setitem(main.ward_forecast_data.rows, GOVAN, {"ward_id": GOVAN})
+    monkeypatch.setitem(client.app.state.ward_forecasts.rows, GOVAN, {"ward_id": GOVAN})
     for url, extra in _all_source_urls():
         response = client.get(url, params={**extra, "source": "model"})
         assert response.status_code == 503, url
@@ -545,7 +541,7 @@ def test_empty_forecast_row_is_unavailable(client, monkeypatch):
 def test_only_usable_ward_projection_leads_can_be_requested(client, monkeypatch, field, value):
     import main
 
-    monkeypatch.setitem(main.ward_forecast_data.rows[GOVAN], field, value)
+    monkeypatch.setitem(client.app.state.ward_forecasts.rows[GOVAN], field, value)
     params = {"mode": "ward", "id": GOVAN, "source": "model"}
     assert client.get("/api/explain", params={**params, "lead": 0}).status_code == 200
     assert client.get("/api/explain", params=params).status_code == 200

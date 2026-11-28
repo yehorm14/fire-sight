@@ -1,7 +1,9 @@
 """Contract checks for committed forecast artefacts and API readiness. No downloads."""
+import csv
 import shutil
 
 import pytest
+from fastapi.testclient import TestClient
 
 import data_contract as dc
 import main
@@ -122,14 +124,15 @@ def test_undeclared_blank_bounds_are_invalid(data_copy):
     assert any("lower <= forecast <= upper" in p for p in dc.check_ward_forecasts(csv))
 
 
-def test_release_degrades_when_pinned_source_is_missing(client, monkeypatch, tmp_path):
+def test_release_degrades_when_pinned_source_is_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(dc, "REFERENCE_DIR", tmp_path)
-    response = client.get("/api/ready")
+    with TestClient(main.create_app()) as client:
+        response = client.get("/api/ready")
     assert response.status_code == 503
     assert any("ward observation input: cannot read" in problem for problem in response.json()["problems"])
 
 
-def test_malformed_observation_source_reports_degraded_readiness(client, monkeypatch, tmp_path):
+def test_malformed_observation_source_reports_degraded_readiness(monkeypatch, tmp_path):
     release = dc.read_ward_release()
     release["observation_source"] = None
     release_path = tmp_path / dc.WARD_RELEASE_JSON.name
@@ -139,7 +142,8 @@ def test_malformed_observation_source_reports_degraded_readiness(client, monkeyp
     assert dc.check_ward_forecasts() == [
         f"{dc.WARD_FORECASTS_CSV.name} references an invalid ward forecast observation source",
     ]
-    response = client.get("/api/ready")
+    with TestClient(main.create_app(ward_release_path=release_path)) as client:
+        response = client.get("/api/ready")
     assert response.status_code == 503
     assert any("invalid ward forecast observation source" in problem for problem in response.json()["problems"])
 
@@ -166,9 +170,9 @@ def test_malformed_zone_csv_is_reported(tmp_path):
     assert "missing columns" in dc.check_zones(csv)[0]
 
 
-def test_liveness_is_independent_of_model_data(client, monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "WARD_FORECASTS_CSV", tmp_path / "gone.csv")
-    assert client.get("/api/health").json()["status"] == "ok"
+def test_liveness_is_independent_of_model_data(tmp_path):
+    with TestClient(main.create_app(ward_forecasts_csv=tmp_path / "gone.csv")) as client:
+        assert client.get("/api/health").json()["status"] == "ok"
 
 
 def test_healthy_bundled_data_is_ready(client, monkeypatch):
@@ -179,22 +183,94 @@ def test_healthy_bundled_data_is_ready(client, monkeypatch):
     assert client.get("/api/status").json()["data_mode"] == "model"
 
 
-def test_missing_model_data_is_degraded_not_mock(client, monkeypatch, tmp_path):
+def test_missing_model_data_is_degraded_not_mock(monkeypatch, tmp_path):
     monkeypatch.delenv(main.MOCK_MODE_ENV, raising=False)
-    monkeypatch.setattr(main, "WARD_FORECASTS_CSV", tmp_path / "gone.csv")
-    response = client.get("/api/ready")
+    with TestClient(main.create_app(ward_forecasts_csv=tmp_path / "gone.csv")) as client:
+        response = client.get("/api/ready")
+        assert client.get("/api/status").json()["data_mode"] == "degraded"
     assert response.status_code == 503
     body = response.json()
     assert body["mode"] == "degraded" and body["mock_mode_enabled"] is False
     assert "missing required file: gone.csv" in body["problems"]
-    assert client.get("/api/status").json()["data_mode"] == "degraded"
 
 
-def test_deliberate_mock_mode_is_distinguishable(client, monkeypatch, tmp_path):
+def test_deliberate_mock_mode_is_distinguishable(monkeypatch, tmp_path):
     monkeypatch.setenv(main.MOCK_MODE_ENV, "1")
-    monkeypatch.setattr(main, "WARD_FORECASTS_CSV", tmp_path / "gone.csv")
-    response = client.get("/api/ready")
+    with TestClient(main.create_app(ward_forecasts_csv=tmp_path / "gone.csv")) as client:
+        response = client.get("/api/ready")
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == "mock" and body["mock_mode_enabled"] is True
     assert body["problems"]  # failure details stay visible even in mock mode
+
+
+
+def test_mismatched_release_is_unavailable_in_its_lifespan(data_copy):
+    csv_path = data_copy / dc.WARD_FORECASTS_CSV.name
+    release = dc.read_ward_release()
+    csv_path.write_text(csv_path.read_text().replace(release["release_id"], "wrong_release", 1))
+    app = main.create_app(ward_forecasts_csv=csv_path, manifest_path=data_copy / dc.MANIFEST_JSON.name)
+    with TestClient(app) as client:
+        ready = client.get("/api/ready")
+        assert ready.status_code == 503
+        status = client.get("/api/status").json()
+        assert status["forecast_available"] is False
+        assert status["ward_forecast_release"] is None
+
+        ward = "/api/strategic/wards/S13002967"
+        model = client.get(ward, params={"source": "model"})
+        assert model.status_code == 503
+        assert any("interval metadata is invalid" in reason for reason in model.json()["detail"]["reasons"])
+        assert client.get(ward, params={"source": "mock"}).json()["properties"]["data_source"] == "mock"
+
+
+def test_app_lifespans_have_independent_rows_and_metadata(data_copy):
+    ward_id = "S13002967"
+    ward = f"/api/strategic/wards/{ward_id}"
+    csv_path = data_copy / dc.WARD_FORECASTS_CSV.name
+    manifest_path = data_copy / dc.MANIFEST_JSON.name
+    release_path = data_copy / dc.WARD_RELEASE_JSON.name
+    release = dc.read_ward_release()
+    release["release_id"] = "fixture_release"
+    release_path.write_text(dc.json.dumps(release))
+    with csv_path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+        columns = reader.fieldnames
+    for row in rows:
+        row["forecast_release_id"] = release["release_id"]
+        if row["ward_id"] == ward_id:
+            row["forecast_1yr"] = "42"
+    with csv_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+    manifest = dc.json.loads(manifest_path.read_text())
+    manifest["ward_forecast_release"] = release
+    manifest["files"][csv_path.name]["sha256"] = dc.sha256_of(csv_path)
+    manifest_path.write_text(dc.json.dumps(manifest))
+
+    default_app = main.create_app()
+    fixture_app = main.create_app(
+        ward_forecasts_csv=csv_path, ward_release_path=release_path, manifest_path=manifest_path,
+    )
+    with TestClient(default_app) as default, TestClient(fixture_app) as fixture:
+        params = {"source": "model"}
+        original = default.get(ward, params=params).json()["properties"]
+        updated = fixture.get(ward, params=params).json()["properties"]
+        assert original["prediction"]["forecast_release"] == dc.read_ward_release()
+        assert updated["prediction"]["forecast_release"] == release
+        assert original["prediction"]["projections"][0]["forecast"] != 42
+        assert updated["prediction"]["projections"][0]["forecast"] == 42
+        assert original["source_version"] != updated["source_version"]
+        assert fixture.get("/api/ready").json()["problems"] == []
+        assert fixture.get("/api/status").json()["ward_forecast_release"] == release
+        explain = fixture.get("/api/explain", params={**params, "mode": "ward", "id": ward_id}).json()
+        assert explain["forecast_release"] == release
+        assert explain["projection"]["forecast"] == 42
+
+        csv_path.unlink()
+        release_path.unlink()
+        assert fixture.get(ward, params=params).json()["properties"] == updated
+        assert fixture.get("/api/ready").json()["problems"] == []
+        assert default.get(ward, params=params).json()["properties"] == original
